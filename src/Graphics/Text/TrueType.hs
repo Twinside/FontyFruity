@@ -1,8 +1,10 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Text.TrueType
      where
 
 import Control.Applicative( (<$>), (<*>) )
+import Control.Monad( foldM )
 import Data.Bits( setBit, testBit )
 import Data.Function( on )
 import Data.Int( Int16 )
@@ -365,6 +367,48 @@ instance Binary FontHeader where
             g64 = getWord64be
 
 
+data MaxpTable = MaxpTable 
+    { -- | version number	0x00010000 for version 1.0.
+      _maxpTableVersion :: !Fixed
+    -- | The number of glyphs in the font.
+    , _maxpnumGlyphs :: !Word16
+    -- | Maximum points in a non-composite glyph.
+    , _maxpmaxPoints :: !Word16
+    -- | Maximum contours in a non-composite glyph.
+    , _maxpmaxContours :: !Word16
+    -- | Maximum points in a composite glyph.
+    , _maxpmaxCompositePoints :: !Word16
+    -- | Maximum contours in a composite glyph.
+    , _maxpmaxCompositeContours :: !Word16
+    -- | 1 if instructions do not use the twilight zone (Z0), or 2 if instructions do use Z0; should be set to 2 in most cases.
+    , _maxpmaxZones :: !Word16
+    -- | Maximum points used in Z0.
+    , _maxpmaxTwilightPoints :: !Word16
+    -- | Number of Storage Area locations. 
+    , _maxpmaxStorage :: !Word16
+    -- | Number of FDEFs.
+    , _maxpmaxFunctionDefs :: !Word16
+    -- | Number of IDEFs.
+    , _maxpmaxInstructionDefs :: !Word16
+    -- | Maximum stack depth .
+    , _maxpmaxStackElements :: !Word16
+    -- | Maximum byte count for glyph instructions.
+    , _maxpmaxSizeOfInstructions :: !Word16
+    -- | Maximum number of components referenced at “top level” for any composite glyph.
+    , _maxpmaxComponentElements :: !Word16
+    -- | Maximum levels of recursion; 1 for simple components.
+    , _maxpmaxComponentDepth :: !Word16
+    }
+    deriving (Eq, Show)
+
+instance Binary MaxpTable where
+    put _ = fail "Unimplemented"
+    get = MaxpTable 
+       <$> get <*> g16 <*> g16 <*> g16 <*> g16 <*> g16
+       <*> g16 <*> g16 <*> g16 <*> g16 <*> g16 <*> g16
+       <*> g16 <*> g16 <*> g16
+         where g16 = getWord16be
+
 data HeaderFlags = HeaderFlags
     { -- | Bit 0 - baseline for font at y=0;
       _hfBaselineY0           :: !Bool
@@ -393,19 +437,28 @@ instance Binary HeaderFlags where
         where setter acc (_, False) = acc
               setter acc (ix, True) = setBit acc ix
 
-
-data TtfTable
-  = RawTable B.ByteString
-  deriving (Eq, Show)
-
 data Font = Font
-    { fontOffsetTable :: !OffsetTable
-    , fontTables      :: ![(B.ByteString, TtfTable)]
+    { _fontOffsetTable :: !OffsetTable
+    , _fontTables      :: ![(B.ByteString, B.ByteString)]
+    , _fontHeader      :: Maybe FontHeader
+    , _fontMaxp        :: Maybe MaxpTable
+    , _fontGlyph       :: Maybe (V.Vector Glyph)
+    , _fontLoca        :: Maybe (VU.Vector Word32)
     }
     deriving (Eq, Show)
 
-fetchTables :: OffsetTable -> Get [(B.ByteString, TtfTable)]
-fetchTables tables = mapM fetch tableList
+emptyFont :: OffsetTable -> Font
+emptyFont table = Font
+    { _fontTables      = []
+    , _fontOffsetTable = table
+    , _fontHeader      = Nothing
+    , _fontGlyph       = Nothing
+    , _fontMaxp        = Nothing
+    , _fontLoca        = Nothing
+    }
+
+fetchTables :: OffsetTable -> Get Font
+fetchTables tables = foldM fetch (emptyFont tables) tableList
   where
     tableList = sortBy (compare `on` _tdeOffset)
                     . V.toList
@@ -416,16 +469,42 @@ fetchTables tables = mapM fetch tableList
         if toDrop < 0 then fail "Weirdo weird"
         else skip $ fromIntegral toDrop
 
-    fetch entry 
+    getLoca font@(Font { _fontMaxp = Just maxp, _fontHeader = Just hdr })
+      | _fHdrIndexToLocFormat hdr == 0 = do
+          v <- VU.replicateM glyphCount (fromIntegral <$> getWord16be)
+          return $ font { _fontLoca = Just v }
       | otherwise = do
-          let tableLength = fromIntegral $ _tdeLength entry
-          gotoOffset entry
-          rawData <- getByteString tableLength
-          return (_tdeTag entry, RawTable rawData)
+          v <- VU.replicateM glyphCount getWord32be
+          return $ font { _fontLoca = Just v }
+      where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
+    getLoca font = return font
+
+    getGlyph font@(Font { _fontMaxp = Just maxp }) = do
+        glyphs <- V.replicateM (fromIntegral $ _maxpnumGlyphs maxp) get
+        return $ font { _fontGlyph = Just glyphs }
+    getGlyph font = return font
+
+    fetch font entry | _tdeTag entry == "loca" =
+      gotoOffset entry >> getLoca font
+
+    fetch font entry | _tdeTag entry == "glyf" =
+      gotoOffset entry >> getGlyph font
+
+    fetch font entry | _tdeTag entry == "head" = do
+      table <- gotoOffset entry >> get
+      return $ font { _fontHeader = Just table }
+
+    fetch font entry | _tdeTag entry == "maxp" = do
+      table <- gotoOffset entry >> get
+      return $ font { _fontMaxp = Just table }
+
+    fetch font entry = do
+      let tableLength = fromIntegral $ _tdeLength entry
+      rawData <- gotoOffset entry >> getByteString tableLength
+      return $ font { _fontTables =
+                        (_tdeTag entry, rawData) : _fontTables font}
 
 instance Binary Font where
   put _ = error "Binary.put Font - unimplemented"
-  get = do
-    header <- get
-    Font header <$> fetchTables header
+  get = get >>= fetchTables
 
