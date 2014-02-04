@@ -1,16 +1,22 @@
+{-# LANGUAGE TupleSections #-}
 module Graphics.Text.TrueType
      where
 
 import Control.Applicative( (<$>), (<*>) )
 import Data.Bits( setBit, testBit )
+import Data.Function( on )
 import Data.Int( Int16 )
-import Data.Word( Word8, Word16, Word32 )
+import Data.List( sortBy, foldl' )
+import Data.Word( Word8, Word16, Word32, Word64 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
+                      , bytesRead
                       , getWord8
                       , getWord16be
                       , getWord32be
+                      , getWord64be
                       , getByteString
+                      , skip
                       )
 
 import Data.Binary.Put( putWord8
@@ -19,6 +25,9 @@ import Data.Binary.Put( putWord8
                       , putByteString
                       )
 
+import Data.Monoid( mempty )
+
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -30,16 +39,23 @@ instance Binary Fixed where
     get = Fixed <$> getWord16be <*> getWord16be
     put (Fixed a b) = putWord16be a >> putWord16be b
 
+newtype FWord = FWord Word16
+    deriving (Eq, Show)
+
+instance Binary FWord where
+  put (FWord w) = putWord16be w
+  get = FWord <$> getWord16be
+
 data OffsetTableHeader = OffsetTableHeader
-    { -- | sfnt version	0x00010000 for version 1.0.
+    { -- | sfnt version 0x00010000 for version 1.0.
       _othSfntVersion   :: !Fixed
-      -- | numTables	Number of tables.
+      -- | numTables Number of tables.
     , _othTableCount    :: !Word16
-      -- | searchRange	(Maximum power of 2 ? numTables) x 16.
+      -- | searchRange (Maximum power of 2 ? numTables) x 16.
     , _othSearchRange   :: !Word16
-      -- | entrySelector	Log2(maximum power of 2 ? numTables).
+      -- | entrySelector Log2(maximum power of 2 ? numTables).
     , _othEntrySelector :: !Word16
-      -- | rangeShift	NumTables x 16-searchRange.
+      -- | rangeShift NumTables x 16-searchRange.
     , _othRangeShift    :: !Word16
     }
     deriving (Eq, Show)
@@ -52,7 +68,7 @@ instance Binary OffsetTableHeader where
       where p16 = putWord16be
 
 data TableDirectoryEntry = TableDirectoryEntry
-    { -- | tag	4 -byte identifier.
+    { -- | tag 4 -byte identifier.
       _tdeTag      :: !BC.ByteString
       -- | CheckSum for this table.
     , _tdeChecksum :: !Word32
@@ -115,9 +131,24 @@ data GlyphContour = GlyphContour
     }
     deriving (Eq, Show)
 
+data CompositeScaling
+    = CompositeScale Word16
+    | CompositeXYScale Word16 Word16
+    | Composite2x2 Word16 Word16 Word16 Word16
+    | CompositeNoScale
+    deriving (Eq, Show)
+
+data GlyphComposition = GlyphComposition
+    { _glyphCompositeFlag    :: !Word16
+    , _glyphCompositeIndex   :: !Word16
+    , _glyphCompositionArg   :: !(Int16, Int16)
+    , _glyphCompositionScale :: !CompositeScaling
+    }
+    deriving (Eq, Show)
+
 data GlyphContent
     = GlyphSimple    GlyphContour
-    | GlyphComposite ()
+    | GlyphComposite (V.Vector GlyphComposition) (VU.Vector Word8)
     deriving (Eq, Show)
 
 data Glyph = Glyph
@@ -127,7 +158,57 @@ data Glyph = Glyph
     deriving (Eq, Show)
 
 getCompositeOutline :: Get GlyphContent
-getCompositeOutline = fail "getCompositeInfo - unimplemented"
+getCompositeOutline =
+    (\(instr, vals) -> GlyphComposite (V.fromList vals) instr) <$> go
+  where
+    go = do
+      flag <- getWord16be
+      value <-
+          GlyphComposition flag
+            <$> getWord16be <*> fetchArguments flag <*> fetchScaling flag
+
+      if flag `testBit` mORE_COMPONENTS then
+          (\(instr, acc) -> (instr, value : acc )) <$> go
+      else
+        if flag `testBit` wE_HAVE_INSTRUCTIONS then do
+            count <- fromIntegral <$> getWord16be
+            (, [value]) <$> VU.replicateM count getWord8
+        else
+            return (mempty, [value])
+
+
+    fetchArguments flag
+        | flag `testBit` aRG_1_AND_2_ARE_WORDS =
+            (,) <$> getInt16be <*> getInt16be
+        | otherwise =
+            (,) <$> getInt8 <*> getInt8
+
+    fetchScaling flag
+        | flag `testBit` wE_HAVE_A_SCALE = CompositeScale <$> getF2Dot14
+        | flag `testBit` wE_HAVE_AN_X_AND_Y_SCALE =
+            CompositeXYScale <$> getF2Dot14 <*> getF2Dot14
+        | flag `testBit` wE_HAVE_A_TWO_BY_TWO =
+            Composite2x2 <$> getF2Dot14 <*> getF2Dot14
+                         <*> getF2Dot14 <*> getF2Dot14
+        | otherwise = return CompositeNoScale
+
+    getInt16be = fromIntegral <$> getWord16be
+    getF2Dot14 = fromIntegral <$> getWord16be
+    getInt8 = fromIntegral <$> getWord8
+
+    aRG_1_AND_2_ARE_WORDS  = 0
+    {-aRGS_ARE_XY_VALUES  = 1-}
+    {-rOUND_XY_TO_GRID  = 2-}
+    wE_HAVE_A_SCALE  = 3
+    {-rESERVED  = 4-}
+    mORE_COMPONENTS  = 5
+    wE_HAVE_AN_X_AND_Y_SCALE  = 6
+    wE_HAVE_A_TWO_BY_TWO  = 7
+    wE_HAVE_INSTRUCTIONS  = 8
+    {-uSE_MY_METRICS  = 9-}
+    {-oVERLAP_COMPOUND  = 10-}
+    {-sCALED_COMPONENT_OFFSET  = 11-}
+    {-uNSCALED_COMPONENT_OFFSET = 12-}
 
 data GlyphFlag = GlyphFlag
     { -- | If set, the point is on the curve;
@@ -145,8 +226,8 @@ data GlyphFlag = GlyphFlag
       -- points in a character.
     , _flagRepeat  :: !Bool
       -- | This flag has two meanings, depending on how the x-Short
-      -- Vector flag is set. If x-Short Vector is set, this bit 
-      -- describes the sign of the value, with 1 equalling positive and 
+      -- Vector flag is set. If x-Short Vector is set, this bit
+      -- describes the sign of the value, with 1 equalling positive and
       -- 0 negative. If the x-Short Vector bit is not set and this bit is set,
       -- then the current x-coordinate is the same as the previous x-coordinate.
       -- If the x-Short Vector bit is not set and this bit is also not set, the
@@ -198,7 +279,7 @@ getCoords flags =
   where
     go _ _ [] = return []
     go axx@(isDual, isShort) prevCoord (flag:flagRest) = do
-        newCoord <- 
+        newCoord <-
             if isDual flag then
               if isShort flag then (prevCoord +) . fromIntegral <$> getWord8
               else return prevCoord
@@ -224,4 +305,127 @@ instance Binary Glyph where
       case _glfNumberOfContours hdr of
         -1 -> Glyph hdr <$> getCompositeOutline
         n -> Glyph hdr <$> getSimpleOutline n
+
+data FontHeader = FontHeader
+    { -- | Table version number	0x00010000 for version 1.0.
+      _fHdrVersionNumber    :: !Fixed
+      -- | fontRevision	Set by font manufacturer.
+    , _fHdrFontRevision     :: !Fixed
+      -- | To compute:  set it to 0, sum the entire font as
+      -- ULONG, then store 0xB1B0AFBA - sum.
+    , _fHdrChecksumAdjust   :: !Word32
+     
+      -- | Should be equal to 0x5F0F3CF5.
+    , _fHdrMagicNumber      :: !Word32
+    , _fHdrFlags            :: !HeaderFlags
+
+      -- | Valid range is from 16 to 16384
+    , _fUnitsPerEm          :: !Word16
+      -- | International date (8-byte field).
+    , _fHdrCreateTime       :: !Word64
+      -- | International date (8-byte field).
+    , _fHdrModificationTime :: !Word64
+
+      -- | For all glyph bounding boxes.
+    , _fHdrxMin             :: !FWord
+      -- | For all glyph bounding boxes.
+    , _fHdrYMin             :: !FWord
+      -- | For all glyph bounding boxes.
+    , _fHdrXMax             :: !FWord
+      -- | For all glyph bounding boxes.
+    , _fHdrYMax             :: !FWord
+      -- | Bit 0 bold (if set to 1); Bit 1 italic (if set to 1)
+    , _fHdrMacStyle         :: !Word16
+      -- | Smallest readable size in pixels.
+    , _fHdrLowestRecPPEM     :: !Word16
+
+      -- | 0   Fully mixed directional glyphs;
+      --  1   Only strongly left to right;
+      --  2   Like 1 but also contains neutrals ;
+      -- -1   Only strongly right to left;
+      -- -2   Like -1 but also contains neutrals.
+    , _fHdrFontDirectionHint :: !Int16
+      -- | 0 for short offsets, 1 for long.
+    , _fHdrIndexToLocFormat  :: !Int16
+      -- | 0 for current format.
+    , _fHdrGlyphDataFormat   :: !Int16
+    }
+    deriving (Eq, Show)
+
+instance Binary FontHeader where
+  put _ = fail "Unimplemented"
+  get =
+    FontHeader <$> get <*> get <*> g32 <*> g32 <*> get
+               <*> g16 <*> g64 <*> g64 <*> get <*> get
+               <*> get <*> get <*> g16 <*> g16 <*> gi16
+               <*> gi16 <*> gi16
+      where g16 = getWord16be
+            g32 = getWord32be
+            gi16 = fromIntegral <$> getWord16be
+            g64 = getWord64be
+
+
+data HeaderFlags = HeaderFlags
+    { -- | Bit 0 - baseline for font at y=0;
+      _hfBaselineY0           :: !Bool
+      -- | Bit 1 - left sidebearing at x=0;
+    , _hfLeftSideBearing      :: !Bool
+      -- | Bit 2 - instructions may depend on point size;
+    , _hfInstrDependPointSize :: !Bool
+      -- | Bit 3 - force ppem to integer values for all internal
+      -- scaler math; may use fractional ppem sizes if this bit
+      -- is clear;
+    , _hfForcePPEM            :: !Bool
+      -- | Bit 4 - instructions may alter advance width (the
+      -- advance widths might not scale linearly);
+    , _hfAlterAdvance         :: !Bool
+    }
+    deriving (Eq, Show)
+
+instance Binary HeaderFlags where
+    get = do
+      flags <- getWord16be
+      let at ix = flags `testBit` ix
+      return $ HeaderFlags (at 0) (at 1) (at 2) (at 3) (at 4)
+
+    put (HeaderFlags a0 a1 a2 a3 a4) =
+      putWord16be . foldl' setter 0 $ zip [0..] [a0, a1, a2, a3, a4]
+        where setter acc (_, False) = acc
+              setter acc (ix, True) = setBit acc ix
+
+
+data TtfTable
+  = RawTable B.ByteString
+  deriving (Eq, Show)
+
+data Font = Font
+    { fontOffsetTable :: !OffsetTable
+    , fontTables      :: ![(B.ByteString, TtfTable)]
+    }
+    deriving (Eq, Show)
+
+fetchTables :: OffsetTable -> Get [(B.ByteString, TtfTable)]
+fetchTables tables = mapM fetch tableList
+  where
+    tableList = sortBy (compare `on` _tdeOffset)
+                    . V.toList
+                    $ _otEntries tables
+    gotoOffset entry = do
+        readed <- bytesRead 
+        let toDrop = fromIntegral (_tdeOffset entry) - readed + 1
+        if toDrop < 0 then fail "Weirdo weird"
+        else skip $ fromIntegral toDrop
+
+    fetch entry 
+      | otherwise = do
+          let tableLength = fromIntegral $ _tdeLength entry
+          gotoOffset entry
+          rawData <- getByteString tableLength
+          return (_tdeTag entry, RawTable rawData)
+
+instance Binary Font where
+  put _ = error "Binary.put Font - unimplemented"
+  get = do
+    header <- get
+    Font header <$> fetchTables header
 
