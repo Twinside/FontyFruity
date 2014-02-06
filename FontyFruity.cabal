@@ -18,6 +18,11 @@ cabal-version:       >=1.10
 library
   exposed-modules: Graphics.Text.TrueType
   other-modules: Graphics.Text.TrueType.Bytecode    
+               , Graphics.Text.TrueType.MaxpTable
+               , Graphics.Text.TrueType.Header
+               , Graphics.Text.TrueType.Glyph
+               , Graphics.Text.TrueType.Types
+               , Graphics.Text.TrueType.OffsetTable
   ghc-options: -Wall
   hs-source-dirs:      src
   default-language:    Haskell2010
