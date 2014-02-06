@@ -188,7 +188,7 @@ getGlyphFlags count = go undefined 0
   where
     go prevFlags n
         | n >= count = return []
-        | _flagRepeat prevFlags && n > 0 = do
+        | n > 0 && _flagRepeat prevFlags = do
             repeatCount <- fromIntegral <$> getWord8
             (replicate repeatCount prevFlags ++) <$> go prevFlags (n + repeatCount)
         | otherwise = do

@@ -49,6 +49,7 @@ import Graphics.Text.TrueType.MaxpTable
 import Graphics.Text.TrueType.Glyph
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
+import Graphics.Text.TrueType.CharacterMap
 
 data Font = Font
     { _fontOffsetTable :: !OffsetTable
@@ -78,7 +79,7 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
                     $ _otEntries tables
     gotoOffset entry = do
         readed <- bytesRead 
-        let toDrop = fromIntegral (_tdeOffset entry) - readed + 1
+        let toDrop = fromIntegral (_tdeOffset entry) - readed
         if toDrop < 0 then fail "Weirdo weird"
         else skip $ fromIntegral toDrop
 
@@ -92,7 +93,9 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
       where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
     getLoca font = return font
 
-    getGlyph font@(Font { _fontMaxp = Just maxp }) = do
+    getGlyph font@(Font { _fontMaxp = Just maxp, _fontLoca = Just locations }) = do
+        let realCount = VU.sum . VU.map (min 1 . uncurry (-))
+                      $ VU.zip (VU.tail locations) locations
         glyphs <- V.replicateM (fromIntegral $ _maxpnumGlyphs maxp) get
         return $ font { _fontGlyph = Just glyphs }
     getGlyph font = return font
