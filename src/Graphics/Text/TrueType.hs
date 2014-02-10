@@ -19,7 +19,7 @@ import Data.Word(
                  Word32
                 {-, Word64-}
                 )
-import Data.Binary( Binary( .. ) )
+import Data.Binary( Binary( .. ), decode )
 import Data.Binary.Get( Get
                       , bytesRead
                       {-, getWord8-}
@@ -27,6 +27,7 @@ import Data.Binary.Get( Get
                       , getWord32be
                       {-, getWord64be-}
                       , getByteString
+                      , getLazyByteString
                       , skip
                       )
 
@@ -40,6 +41,7 @@ import Data.Binary.Get( Get
 {-import Data.Monoid( mempty )-}
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as LB
 {-import qualified Data.ByteString.Char8 as BC-}
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -93,18 +95,17 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
       where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
     getLoca font = return font
 
-    getGlyph font@(Font { _fontMaxp = Just maxp, _fontLoca = Just locations }) = do
-        let realCount = VU.sum . VU.map (min 1 . uncurry (-))
-                      $ VU.zip (VU.tail locations) locations
-        glyphs <- V.replicateM (fromIntegral $ _maxpnumGlyphs maxp) get
-        return $ font { _fontGlyph = Just glyphs }
-    getGlyph font = return font
+    getGlyph font@(Font { _fontLoca = Just locations }) str =
+      return $ font { _fontGlyph = Just . V.map decoder $ VU.convert locations }
+          where decoder = decode . (`LB.drop` str) . fromIntegral
+    getGlyph font _ = return font
 
     fetch font entry | _tdeTag entry == "loca" =
       gotoOffset entry >> getLoca font
 
     fetch font entry | _tdeTag entry == "glyf" =
-      gotoOffset entry >> getGlyph font
+      gotoOffset entry >>
+          getLazyByteString (fromIntegral $ _tdeLength entry) >>= getGlyph font
 
     fetch font entry | _tdeTag entry == "head" = do
       table <- gotoOffset entry >> get
@@ -123,4 +124,21 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
 instance Binary Font where
   put _ = error "Binary.put Font - unimplemented"
   get = get >>= fetchTables
+
+type Dpi = Int
+type PointSize = Int
+
+getGlyphIndexCurvesAtPointSize :: Font -> Dpi -> PointSize -> Int
+                               -> [VU.Vector (Float, Float)]
+getGlyphIndexCurvesAtPointSize Font { _fontHeader = Nothing } _ _ _ = []
+getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Nothing } _ _ _ = []
+getGlyphIndexCurvesAtPointSize
+    Font { _fontHeader = Just hdr, _fontGlyph = Just glyph } dpi pointSize index
+        | index >= V.length glyph = []
+        | otherwise = []
+  where pixelSize = fromIntegral (pointSize * dpi) / 72
+        emSize = fromIntegral $ _fUnitsPerEm hdr
+
+        toPixelCoordinate coord =
+            (fromIntegral coord * pixelSize) / emSize
 

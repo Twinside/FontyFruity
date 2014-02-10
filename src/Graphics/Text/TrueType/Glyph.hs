@@ -197,11 +197,11 @@ getGlyphFlags count = go undefined 0
 
 getCoords :: [GlyphFlag] -> Get (VU.Vector (Int16, Int16))
 getCoords flags =
-    VU.fromList <$> (zip <$> go (_flagXSame, _flagXshort) 0 flags
-                         <*> go (_flagYSame, _flagYShort) 0 flags)
+    VU.fromList <$> (zip <$> go (_flagXSame, _flagXshort) False 0 flags
+                         <*> go (_flagYSame, _flagYShort) False 0 flags)
   where
-    go _ _ [] = return []
-    go axx@(isDual, isShort) prevCoord (flag:flagRest) = do
+    go _ _ _ [] = return []
+    go axx@(isDual, isShort) prevOn prevCoord (flag:flagRest) = do
         newCoord <-
             if isDual flag then
               if isShort flag then (prevCoord +) . fromIntegral <$> getWord8
@@ -209,7 +209,13 @@ getCoords flags =
             else
               if isShort flag then (prevCoord -) . fromIntegral <$> getWord8
               else (prevCoord +) . fromIntegral <$> getWord16be
-        (newCoord :) <$> go axx newCoord flagRest
+        let currentOnCurve = _flagOnCurve flag
+            halfCoord = (prevCoord + newCoord) `div` 2
+            prepend
+              | currentOnCurve == prevOn = (halfCoord :) . (newCoord :)
+              | otherwise = (newCoord :)
+
+        prepend <$> go axx currentOnCurve newCoord flagRest
 
 getSimpleOutline :: Int16 -> Get GlyphContent
 getSimpleOutline counterCount = do

@@ -1,3 +1,4 @@
+import Data.Maybe( fromJust )
 import Data.Monoid( mempty )
 import Control.Monad( forM_ )
 import Data.Binary( decodeFile )
@@ -10,5 +11,7 @@ main :: IO ()
 main = do
     font <- decodeFile "C:/Windows/Fonts/Consola.ttf" :: IO Font
     putStrLn . groom
-        $ font { _fontTables = [(t, mempty) | (t, _) <- _fontTables font] }
+        $ font { _fontGlyph = Nothing
+               , _fontTables = [(t, mempty) | (t, _) <- _fontTables font] }
+    V.mapM_ (putStrLn . groom) . fromJust $ _fontGlyph font
 
