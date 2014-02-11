@@ -135,10 +135,16 @@ getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Nothing } _ _ _ = []
 getGlyphIndexCurvesAtPointSize
     Font { _fontHeader = Just hdr, _fontGlyph = Just glyph } dpi pointSize index
         | index >= V.length glyph = []
-        | otherwise = []
-  where pixelSize = fromIntegral (pointSize * dpi) / 72
-        emSize = fromIntegral $ _fUnitsPerEm hdr
+        | otherwise = glyphExtract $ glyph V.! index
+  where
+    pixelSize = fromIntegral (pointSize * dpi) / 72
+    emSize = fromIntegral $ _fUnitsPerEm hdr
 
-        toPixelCoordinate coord =
-            (fromIntegral coord * pixelSize) / emSize
+    toPixelCoordinate coord =
+        (fromIntegral coord * pixelSize) / emSize
+
+    glyphExtract Glyph { _glyphContent = GlyphComposite _ _ } = []
+    glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
+        [ VU.map (\(x, y) -> (toPixelCoordinate x, toPixelCoordinate y)) c
+                | c <- _glyphPoints countour]
 

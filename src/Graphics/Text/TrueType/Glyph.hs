@@ -12,6 +12,7 @@ module Graphics.Text.TrueType.Glyph
 import Control.Applicative( (<$>), (<*>) )
 import Data.Bits( setBit, testBit )
 import Data.Int( Int16 )
+import Data.List( mapAccumR )
 import Data.Monoid( mempty )
 import Data.Word( Word8, Word16 )
 import Data.Binary( Binary( .. ) )
@@ -50,7 +51,7 @@ instance Binary GlyphHeader where
 
 data GlyphContour = GlyphContour
     { _glyphInstructions :: !(VU.Vector Word8)
-    , _glyphPoints       :: !(VU.Vector (Int16, Int16))
+    , _glyphPoints       :: ![VU.Vector (Int16, Int16)]
     }
     deriving (Eq, Show)
 
@@ -225,7 +226,13 @@ getSimpleOutline counterCount = do
     instructions <- VU.replicateM instructionCount getWord8
 
     flags <- getGlyphFlags $ fromIntegral pointCount
-    GlyphSimple . GlyphContour instructions <$> getCoords flags
+    GlyphSimple . GlyphContour instructions 
+                . breakOutline endOfPoints <$> getCoords flags
+  where
+    prepender (v, lst) = v : lst
+    breakOutline endPoints coords =
+        prepender . mapAccumR breaker coords . VU.toList $ VU.init endPoints
+          where breaker array ix = VU.splitAt (fromIntegral ix) array
 
 instance Binary Glyph where
     put _ = fail "Glyph.put - unimplemented"
