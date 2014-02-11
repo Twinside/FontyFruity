@@ -10,7 +10,7 @@ module Graphics.Text.TrueType.Glyph
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
-import Data.Bits( setBit, testBit )
+import Data.Bits( setBit, testBit, shiftL )
 import Data.Int( Int16 )
 import Data.List( mapAccumR )
 import Data.Monoid( mempty )
@@ -55,11 +55,14 @@ data GlyphContour = GlyphContour
     }
     deriving (Eq, Show)
 
-data CompositeScaling
-    = CompositeScale Word16
-    | CompositeXYScale Word16 Word16
-    | Composite2x2 Word16 Word16 Word16 Word16
-    | CompositeNoScale
+data CompositeScaling = CompositeScaling
+    { _a :: !Int16
+    , _b :: !Int16
+    , _c :: !Int16
+    , _d :: !Int16
+    , _e :: !Int16
+    , _f :: !Int16
+    }
     deriving (Eq, Show)
 
 data GlyphComposition = GlyphComposition
@@ -87,9 +90,11 @@ getCompositeOutline =
   where
     go = do
       flag <- getWord16be
-      value <-
-          GlyphComposition flag
-            <$> getWord16be <*> fetchArguments flag <*> fetchScaling flag
+      index <- getWord16be
+      args <- fetchArguments flag
+      scaling <- fetchScaling flag
+      let fullScaling = fetchOffset scaling args flag
+          value = GlyphComposition flag index args fullScaling
 
       if flag `testBit` mORE_COMPONENTS then
           (\(instr, acc) -> (instr, value : acc )) <$> go
@@ -108,20 +113,31 @@ getCompositeOutline =
             (,) <$> getInt8 <*> getInt8
 
     fetchScaling flag
-        | flag `testBit` wE_HAVE_A_SCALE = CompositeScale <$> getF2Dot14
+        | flag `testBit` wE_HAVE_A_SCALE =
+            (\v -> CompositeScaling v 0 0 v) <$> getF2Dot14
         | flag `testBit` wE_HAVE_AN_X_AND_Y_SCALE =
-            CompositeXYScale <$> getF2Dot14 <*> getF2Dot14
+            (\x y -> CompositeScaling x 0 0 y) <$> getF2Dot14 <*> getF2Dot14
         | flag `testBit` wE_HAVE_A_TWO_BY_TWO =
-            Composite2x2 <$> getF2Dot14 <*> getF2Dot14
-                         <*> getF2Dot14 <*> getF2Dot14
-        | otherwise = return CompositeNoScale
+            CompositeScaling <$> getF2Dot14 <*> getF2Dot14
+                             <*> getF2Dot14 <*> getF2Dot14
+        | otherwise = return $ CompositeScaling one 0 0 one
+           where one = 1 `shiftL` 14
+
+    fetchOffset scaling (a1, a2) flag
+        | flag `testBit` aRGS_ARE_XY_VALUES = scaling a1 a2
+        | otherwise = scaling 0 0 -- TODO fix this crap
+
+    {--
+    if (!ARGS_ARE_XY_VALUES)
+        1st short contains the index of matching point in compound being constructed
+        2nd short contains index of matching point in component -}
 
     getInt16be = fromIntegral <$> getWord16be
     getF2Dot14 = fromIntegral <$> getWord16be
     getInt8 = fromIntegral <$> getWord8
 
     aRG_1_AND_2_ARE_WORDS  = 0
-    {-aRGS_ARE_XY_VALUES  = 1-}
+    aRGS_ARE_XY_VALUES  = 1
     {-rOUND_XY_TO_GRID  = 2-}
     wE_HAVE_A_SCALE  = 3
     {-rESERVED  = 4-}

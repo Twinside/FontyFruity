@@ -133,17 +133,44 @@ getGlyphIndexCurvesAtPointSize :: Font -> Dpi -> PointSize -> Int
 getGlyphIndexCurvesAtPointSize Font { _fontHeader = Nothing } _ _ _ = []
 getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Nothing } _ _ _ = []
 getGlyphIndexCurvesAtPointSize
-    Font { _fontHeader = Just hdr, _fontGlyph = Just glyph } dpi pointSize index
-        | index >= V.length glyph = []
-        | otherwise = glyphExtract $ glyph V.! index
+    font@Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs } dpi pointSize index
+        | index >= V.length allGlyphs = []
+        | otherwise = glyphExtract $ allGlyphs V.! index
   where
     pixelSize = fromIntegral (pointSize * dpi) / 72
+    recurse = getGlyphIndexCurvesAtPointSize font dpi pointSize . fromIntegral
     emSize = fromIntegral $ _fUnitsPerEm hdr
 
     toPixelCoordinate coord =
         (fromIntegral coord * pixelSize) / emSize
 
-    glyphExtract Glyph { _glyphContent = GlyphComposite _ _ } = []
+    composeGlyph composition = VU.map updateCoords <$> subCurves
+      where
+        subCurves = recurse $ _glyphCompositeIndex composition
+        toFloat v = fromIntegral v / (0x4000 :: Float)
+        CompositeScaling ai bi ci di ei fi = _glyphCompositionScale composition
+
+        scaler v1 v2
+            | fromIntegral (abs (abs ai - abs ci)) <= (33 / 65536 :: Float) = 2 * vf
+            | otherwise = vf
+          where
+           vf = toFloat $ max (abs v1) (abs v2)
+
+        m = scaler ai bi
+        n = scaler ci di
+
+        am = toFloat ai / m
+        cm = toFloat ci / m
+        bn = toFloat ci / n
+        dn = toFloat di / n
+        e = toFloat ei
+        f = toFloat fi
+
+        updateCoords (x,y) =
+            (m * (am * x + cm *y + e), n * (bn * x + dn * y + f))
+
+    glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
+        concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
         [ VU.map (\(x, y) -> (toPixelCoordinate x, toPixelCoordinate y)) c
                 | c <- _glyphPoints countour]
