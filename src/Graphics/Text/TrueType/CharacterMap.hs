@@ -71,6 +71,7 @@ instance Binary CharMapOffset where
 
 data Table
     = TableFormat0 !(VU.Vector Word8)
+    | TableFormat2 Format2
     deriving (Eq, Show)
 
 getFormat0 :: Get Table
@@ -78,6 +79,37 @@ getFormat0 = TableFormat0 <$> do
     count <- fromIntegral <$> getWord16be
     _version <- getWord16be
     VU.replicateM count getWord8
+
+data Format2SubHeader = Format2SubHeader
+    { _f2SubCode       :: !Word16
+    , _f2EntryCount    :: !Word16
+    , _f2IdDelta       :: !Int16
+    , _f2IdRangeOffset :: !Word16
+    }
+
+instance Binary Format2SubHeader where
+    put (Format2SubHeader a b c d) =
+        p16 a >> p16 b >> pi16 c >> p16 d
+      where
+        p16 = putWord16be
+        pi16 = p16 . fromIntegral
+
+    get = Format2SubHeader <$> g16 <*> g16 <*> (fromIngegral <$> g16) <*> g16
+      where g16 = getWord16be
+
+instance Binary Format2 where
+    put _ = fail "Format2.put - unimplemented"
+    get = do
+      tableSize <- getWord16be
+      lang <- getWord16be
+      subKeys <- VU.map (`div` 8) <$> VU.replicateM 256 getWord16be
+      let maxSubIndex = VU.maximum subKeys
+
+data Format2 = Format2
+    { _format2Language   :: !Word16
+    , _format2SubKeys    :: !Word16
+    , _format2SubHeaders :: !Format2SubHeader
+    }
 
 instance Binary Table where
     put _ = fail "Binary.put Table - Unimplemented"
