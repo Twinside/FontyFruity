@@ -11,8 +11,10 @@ import Data.Binary.Get( Get
 
 import Data.Binary.Put( putWord16be
                       , putWord32be )
+import Data.Int( Int16 )
 import Data.Word( Word8, Word16, Word32 )
 
+import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
 data TtfEncoding
@@ -86,6 +88,7 @@ data Format2SubHeader = Format2SubHeader
     , _f2IdDelta       :: !Int16
     , _f2IdRangeOffset :: !Word16
     }
+    deriving (Eq, Show)
 
 instance Binary Format2SubHeader where
     put (Format2SubHeader a b c d) =
@@ -94,22 +97,26 @@ instance Binary Format2SubHeader where
         p16 = putWord16be
         pi16 = p16 . fromIntegral
 
-    get = Format2SubHeader <$> g16 <*> g16 <*> (fromIngegral <$> g16) <*> g16
+    get = Format2SubHeader <$> g16 <*> g16 <*> (fromIntegral <$> g16) <*> g16
       where g16 = getWord16be
 
 instance Binary Format2 where
     put _ = fail "Format2.put - unimplemented"
     get = do
-      tableSize <- getWord16be
+      _tableSize <- getWord16be
       lang <- getWord16be
       subKeys <- VU.map (`div` 8) <$> VU.replicateM 256 getWord16be
       let maxSubIndex = VU.maximum subKeys
+      subHeaders <- V.replicateM (fromIntegral maxSubIndex) get
+      -- TODO finish the parsing of format 2
+      return $ Format2 lang subKeys subHeaders
 
 data Format2 = Format2
     { _format2Language   :: !Word16
-    , _format2SubKeys    :: !Word16
-    , _format2SubHeaders :: !Format2SubHeader
+    , _format2SubKeys    :: !(VU.Vector Word16)
+    , _format2SubHeaders :: !(V.Vector Format2SubHeader)
     }
+    deriving (Eq, Show)
 
 instance Binary Table where
     put _ = fail "Binary.put Table - Unimplemented"
