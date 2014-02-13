@@ -12,7 +12,7 @@ module Graphics.Text.TrueType.Glyph
 import Control.Applicative( (<$>), (<*>) )
 import Data.Bits( setBit, testBit, shiftL )
 import Data.Int( Int16 )
-import Data.List( mapAccumR )
+import Data.List( mapAccumL, mapAccumR, zip4 )
 import Data.Monoid( mempty )
 import Data.Word( Word8, Word16 )
 import Data.Binary( Binary( .. ) )
@@ -21,12 +21,13 @@ import Data.Binary.Get( Get
                       , getWord16be )
 
 import Data.Binary.Put( putWord8, putWord16be )
+import Data.Tuple( swap )
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
-import Text.Printf
-import Debug.Trace
+{-import Text.Printf-}
+{-import Debug.Trace-}
 
 data GlyphHeader = GlyphHeader
     { -- | If the number of contours is greater than or equal
@@ -217,7 +218,7 @@ getGlyphFlags count = go 0
         else (flag :) <$> go (n + 1)
 
 getCoords :: [GlyphFlag] -> Get (VU.Vector (Int16, Int16))
-getCoords flags = trace (show flags) $
+getCoords flags =
     VU.fromList <$> (zip <$> go (_flagXSame, _flagXshort) 0 flags
                          <*> go (_flagYSame, _flagYShort) 0 flags)
   where
@@ -245,12 +246,29 @@ getSimpleOutline counterCount = do
 
     flags <- getGlyphFlags $ fromIntegral pointCount
     GlyphSimple . GlyphContour instructions 
+                . flagRewrite flags
                 . breakOutline endOfPoints <$> getCoords flags
   where
     prepender (v, lst) = v : lst
     breakOutline endPoints coords =
         prepender . mapAccumR breaker coords . VU.toList $ VU.init endPoints
           where breaker array ix = VU.splitAt (fromIntegral ix + 1) array
+
+    flagRewrite flags coords = map process $ zip flagGroup coords
+      where
+        (_, flagGroup) =
+          mapAccumL (\acc v -> swap $ splitAt (VU.length v) acc) flags coords
+
+        process (flags, coord) = VU.fromList . (x :) $ concatMap expand mixed
+          where
+           isOnSide = map _flagOnCurve flags
+           lst@(x:xs) = VU.toList coord
+           mixed = zip4 flags (tail flags) lst xs
+           expand (onp, on, (px, py), (x,y))
+            | onp == on = [((px + x) `div` 2, (py + y) `div` 2), (x,y)]
+            | otherwise = [(x,y)]
+
+
 
 instance Binary Glyph where
     put _ = fail "Glyph.put - unimplemented"
