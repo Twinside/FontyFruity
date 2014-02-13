@@ -51,7 +51,7 @@ import Graphics.Text.TrueType.MaxpTable
 import Graphics.Text.TrueType.Glyph
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
-import Graphics.Text.TrueType.CharacterMap
+{-import Graphics.Text.TrueType.CharacterMap-}
 
 data Font = Font
     { _fontOffsetTable :: !OffsetTable

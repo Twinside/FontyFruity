@@ -25,6 +25,9 @@ import Data.Binary.Put( putWord8, putWord16be )
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
+import Text.Printf
+import Debug.Trace
+
 data GlyphHeader = GlyphHeader
     { -- | If the number of contours is greater than or equal
       -- to zero, this is a single glyph; if negative, this is
@@ -201,38 +204,37 @@ instance Binary GlyphFlag where
         }
 
 getGlyphFlags :: Int -> Get [GlyphFlag]
-getGlyphFlags count = go undefined 0
+getGlyphFlags count = go 0
   where
-    go prevFlags n
-        | n >= count = return []
-        | n > 0 && _flagRepeat prevFlags = do
-            repeatCount <- fromIntegral <$> getWord8
-            (replicate repeatCount prevFlags ++) <$> go prevFlags (n + repeatCount)
-        | otherwise = do
-            v <- get
-            (v :) <$> go v 1
+    go n | n >= count = return []
+    go n = do
+      flag <- get
+      if _flagRepeat flag
+        then do
+          repeatCount <- fromIntegral <$> getWord8
+          let real = min (count - n) (repeatCount + 1)
+          (replicate real flag ++) <$> go (n + real)
+        else (flag :) <$> go (n + 1)
 
 getCoords :: [GlyphFlag] -> Get (VU.Vector (Int16, Int16))
-getCoords flags =
-    VU.fromList <$> (zip <$> go (_flagXSame, _flagXshort) False 0 flags
-                         <*> go (_flagYSame, _flagYShort) False 0 flags)
+getCoords flags = trace (show flags) $
+    VU.fromList <$> (zip <$> go (_flagXSame, _flagXshort) 0 flags
+                         <*> go (_flagYSame, _flagYShort) 0 flags)
   where
-    go _ _ _ [] = return []
-    go axx@(isDual, isShort) prevOn prevCoord (flag:flagRest) = do
-        newCoord <-
-            if isDual flag then
-              if isShort flag then (prevCoord +) . fromIntegral <$> getWord8
-              else return prevCoord
-            else
-              if isShort flag then (prevCoord -) . fromIntegral <$> getWord8
-              else (prevCoord +) . fromIntegral <$> getWord16be
-        let currentOnCurve = _flagOnCurve flag
-            halfCoord = (prevCoord + newCoord) `div` 2
-            prepend
-              | currentOnCurve == prevOn = (halfCoord :) . (newCoord :)
-              | otherwise = (newCoord :)
+    go _ _ [] = return []
+    go axx@(isSame, isShort) prevCoord (flag:flagRest) = do
+        let fetcher
+              | isShort flag && isSame flag =
+                  (prevCoord +) . fromIntegral <$> getWord8
+              | isShort flag = 
+                  (prevCoord - ) . fromIntegral <$> getWord8
+              | isSame flag =
+                  return prevCoord
+              | otherwise =
+                  (prevCoord +) . fromIntegral <$> getWord16be
 
-        prepend <$> go axx currentOnCurve newCoord flagRest
+        newCoord <- fetcher
+        (newCoord :) <$> go axx newCoord flagRest
 
 getSimpleOutline :: Int16 -> Get GlyphContent
 getSimpleOutline counterCount = do
@@ -248,7 +250,7 @@ getSimpleOutline counterCount = do
     prepender (v, lst) = v : lst
     breakOutline endPoints coords =
         prepender . mapAccumR breaker coords . VU.toList $ VU.init endPoints
-          where breaker array ix = VU.splitAt (fromIntegral ix) array
+          where breaker array ix = VU.splitAt (fromIntegral ix + 1) array
 
 instance Binary Glyph where
     put _ = fail "Glyph.put - unimplemented"
