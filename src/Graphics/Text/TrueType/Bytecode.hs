@@ -1,11 +1,17 @@
 module Graphics.Text.TrueType.Bytecode where
 
+import Data.Word( Word8, Word16 )
+import qualified Data.Vector.Unboxed as VU
+
 type InstructionFlag = Bool
 
 data Instruction =
+      NPUSHB (VU.Vector Word8)
+    | NPUSHW (VU.Vector Word16)
+
     -- | Set Vectors To Coordinate axis.
     -- Apply to freedom & projection vector
-      SVTCA InstructionFlag
+    | SVTCA InstructionFlag
     -- | Set projection vector to coordinate axis.
     -- Apply to projection vector
     | SPVTCA InstructionFlag

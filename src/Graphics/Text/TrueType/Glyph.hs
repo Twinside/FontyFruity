@@ -7,6 +7,7 @@ module Graphics.Text.TrueType.Glyph
     , GlyphContent( .. )
     , Glyph( .. )
     , GlyphFlag( .. )
+    , extractFlatOutline
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
@@ -55,6 +56,7 @@ instance Binary GlyphHeader where
 
 data GlyphContour = GlyphContour
     { _glyphInstructions :: !(VU.Vector Word8)
+    , _glyphFlags        :: ![GlyphFlag]
     , _glyphPoints       :: ![VU.Vector (Int16, Int16)]
     }
     deriving (Eq, Show)
@@ -237,6 +239,33 @@ getCoords flags =
         newCoord <- fetcher
         (newCoord :) <$> go axx newCoord flagRest
 
+extractFlatOutline :: GlyphContour
+                   -> [VU.Vector (Int16, Int16)]
+extractFlatOutline contour = map go $ zip flagGroup coords
+  where
+    allFlags = _glyphFlags contour
+    coords = _glyphPoints contour
+    (_, flagGroup) =
+      mapAccumL (\acc v -> swap $ splitAt (VU.length v) acc) allFlags coords
+
+    go (flags, coord) = VU.fromList . (firstPoint :) $ expand mixed
+      where
+       isOnSide = map _flagOnCurve flags
+       lst@(firstPoint:xs) = VU.toList coord
+       mixed = zip4 isOnSide (tail isOnSide) lst xs
+       midPoint (x1, y1) (x2, y2) =
+           ((x1 + x2) `div` 2, (y1 + y2) `div` 2)
+
+       expand [] = []
+       expand [(onp, on, prevPoint, currPoint)]
+        | onp == on = (prevPoint `midPoint` currPoint) : endJunction
+        | otherwise = endJunction
+         where endJunction =
+                [currPoint, currPoint `midPoint` firstPoint, firstPoint]
+       expand ((onp, on, prevPoint, currPoint):rest)
+        | onp == on = prevPoint `midPoint` currPoint : currPoint : expand rest
+        | otherwise = currPoint : expand rest
+
 getSimpleOutline :: Int16 -> Get GlyphContent
 getSimpleOutline counterCount = do
     endOfPoints <- VU.replicateM (fromIntegral counterCount) getWord16be
@@ -245,30 +274,13 @@ getSimpleOutline counterCount = do
     instructions <- VU.replicateM instructionCount getWord8
 
     flags <- getGlyphFlags $ fromIntegral pointCount
-    GlyphSimple . GlyphContour instructions 
-                . flagRewrite flags
+    GlyphSimple . GlyphContour instructions flags
                 . breakOutline endOfPoints <$> getCoords flags
   where
     prepender (v, lst) = v : lst
     breakOutline endPoints coords =
         prepender . mapAccumR breaker coords . VU.toList $ VU.init endPoints
           where breaker array ix = VU.splitAt (fromIntegral ix + 1) array
-
-    flagRewrite flags coords = map process $ zip flagGroup coords
-      where
-        (_, flagGroup) =
-          mapAccumL (\acc v -> swap $ splitAt (VU.length v) acc) flags coords
-
-        process (flags, coord) = VU.fromList . (x :) $ concatMap expand mixed
-          where
-           isOnSide = map _flagOnCurve flags
-           lst@(x:xs) = VU.toList coord
-           mixed = zip4 flags (tail flags) lst xs
-           expand (onp, on, (px, py), (x,y))
-            | onp == on = [((px + x) `div` 2, (py + y) `div` 2), (x,y)]
-            | otherwise = [(x,y)]
-
-
 
 instance Binary Glyph where
     put _ = fail "Glyph.put - unimplemented"

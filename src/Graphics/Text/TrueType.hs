@@ -132,14 +132,23 @@ getGlyphIndexCurvesAtPointSize :: Font -> Dpi -> PointSize -> Int
                                -> [VU.Vector (Float, Float)]
 getGlyphIndexCurvesAtPointSize Font { _fontHeader = Nothing } _ _ _ = []
 getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Nothing } _ _ _ = []
+getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Just allGlyphs } _ _ idx
+    | idx >= V.length allGlyphs = []
 getGlyphIndexCurvesAtPointSize
-    font@Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs } dpi pointSize index
-        | index >= V.length allGlyphs = []
-        | otherwise = glyphExtract $ allGlyphs V.! index
+    Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs } dpi pointSize globalIndex =
+        glyphReverse (_glyphHeader glyphAtIndex) <$> go globalIndex
   where
+    go index | index >= V.length allGlyphs = []
+             | otherwise = glyphExtract $ allGlyphs V.! index
+
+    glyphAtIndex = allGlyphs V.! globalIndex
     pixelSize = fromIntegral (pointSize * dpi) / 72
-    recurse = getGlyphIndexCurvesAtPointSize font dpi pointSize . fromIntegral
+    recurse = go . fromIntegral
     emSize = fromIntegral $ _fUnitsPerEm hdr
+
+    glyphReverse GlyphHeader { _glfYMax = yMax } =
+        VU.map (\(x,y) -> (x, yF - y))
+          where yF = toPixelCoordinate yMax
 
     toPixelCoordinate coord =
         (fromIntegral coord * pixelSize) / emSize
@@ -173,5 +182,5 @@ getGlyphIndexCurvesAtPointSize
         concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
         [ VU.map (\(x, y) -> (toPixelCoordinate x, toPixelCoordinate y)) c
-                | c <- _glyphPoints countour]
+                | c <- extractFlatOutline countour]
 
