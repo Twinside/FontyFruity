@@ -8,6 +8,7 @@ module Graphics.Text.TrueType.Glyph
     , Glyph( .. )
     , GlyphFlag( .. )
     , extractFlatOutline
+    , emptyGlyph
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
@@ -46,6 +47,9 @@ data GlyphHeader = GlyphHeader
     }
     deriving (Eq, Show)
 
+emptyGlyphHeader :: GlyphHeader
+emptyGlyphHeader = GlyphHeader 0 0 0 0 0
+
 instance Binary GlyphHeader where
     get = GlyphHeader <$> g16 <*> g16 <*> g16 <*> g16 <*> g16
       where g16 = fromIntegral <$> getWord16be
@@ -80,7 +84,8 @@ data GlyphComposition = GlyphComposition
     deriving (Eq, Show)
 
 data GlyphContent
-    = GlyphSimple    GlyphContour
+    = GlyphEmpty
+    | GlyphSimple    GlyphContour
     | GlyphComposite (V.Vector GlyphComposition) (VU.Vector Word8)
     deriving (Eq, Show)
 
@@ -89,6 +94,9 @@ data Glyph = Glyph
     , _glyphContent :: !GlyphContent
     }
     deriving (Eq, Show)
+
+emptyGlyph :: Glyph
+emptyGlyph = Glyph emptyGlyphHeader GlyphEmpty
 
 getCompositeOutline :: Get GlyphContent
 getCompositeOutline =
@@ -248,9 +256,12 @@ extractFlatOutline contour = map go $ zip flagGroup coords
     (_, flagGroup) =
       mapAccumL (\acc v -> swap $ splitAt (VU.length v) acc) allFlags coords
 
-    go (flags, coord) = VU.fromList . (firstPoint :) $ expand mixed
+    go (flags, coord) 
+      | VU.null coord = mempty
+      | otherwise = VU.fromList . (firstPoint :) $ expand mixed
       where
        isOnSide = map _flagOnCurve flags
+       firstOnCurve = head isOnSide
        lst@(firstPoint:xs) = VU.toList coord
        mixed = zip4 isOnSide (tail isOnSide) lst xs
        midPoint (x1, y1) (x2, y2) =
@@ -260,8 +271,10 @@ extractFlatOutline contour = map go $ zip flagGroup coords
        expand [(onp, on, prevPoint, currPoint)]
         | onp == on = (prevPoint `midPoint` currPoint) : endJunction
         | otherwise = endJunction
-         where endJunction =
-                [currPoint, currPoint `midPoint` firstPoint, firstPoint]
+         where endJunction 
+                | on && firstOnCurve =
+                    [currPoint, currPoint `midPoint` firstPoint, firstPoint]
+                | otherwise = [currPoint, firstPoint]
        expand ((onp, on, prevPoint, currPoint):rest)
         | onp == on = prevPoint `midPoint` currPoint : currPoint : expand rest
         | otherwise = currPoint : expand rest

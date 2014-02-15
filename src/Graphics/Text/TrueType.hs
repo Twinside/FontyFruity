@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Graphics.Text.TrueType
      where
 
@@ -19,7 +21,7 @@ import Data.Word(
                  Word32
                 {-, Word64-}
                 )
-import Data.Binary( Binary( .. ), decode )
+import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead
                       {-, getWord8-}
@@ -31,6 +33,14 @@ import Data.Binary.Get( Get
                       , skip
                       )
 
+#if MIN_VERSION_binary(0,6,4)
+import qualified Data.Binary.Get as G
+#else
+import qualified Data.Binary as DB
+import qualified Control.Exception as E
+-- I feel so dirty. :(
+import System.IO.Unsafe( unsafePerformIO )
+#endif
 
 {-import Data.Binary.Put( putWord8-}
                       {-, putWord16be-}
@@ -53,6 +63,8 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 {-import Graphics.Text.TrueType.CharacterMap-}
 
+{-import Debug.Trace-}
+
 data Font = Font
     { _fontOffsetTable :: !OffsetTable
     , _fontTables      :: ![(B.ByteString, B.ByteString)]
@@ -73,6 +85,18 @@ emptyFont table = Font
     , _fontLoca        = Nothing
     }
 
+decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
+decodeWithDefault defaultValue str =
+#if MIN_VERSION_binary(0,6,4)
+  case G.runGetOrFail get str of
+    Left _ -> defaultValue
+    Right (_, _, value) -> value
+#else
+  unsafePerformIO $ E.evaluate (DB.decode str) `E.catch` catcher
+      where catcher :: E.SomeException -> IO a
+            catcher _ = return defaultValue
+#endif
+
 fetchTables :: OffsetTable -> Get Font
 fetchTables tables = foldM fetch (emptyFont tables) tableList
   where
@@ -87,7 +111,8 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
 
     getLoca font@(Font { _fontMaxp = Just maxp, _fontHeader = Just hdr })
       | _fHdrIndexToLocFormat hdr == 0 = do
-          v <- VU.replicateM glyphCount (fromIntegral <$> getWord16be)
+          v <- VU.replicateM glyphCount
+                ((* 2) . fromIntegral <$> getWord16be)
           return $ font { _fontLoca = Just v }
       | otherwise = do
           v <- VU.replicateM glyphCount getWord32be
@@ -96,8 +121,15 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
     getLoca font = return font
 
     getGlyph font@(Font { _fontLoca = Just locations }) str =
-      return $ font { _fontGlyph = Just . V.map decoder $ VU.convert locations }
-          where decoder = decode . (`LB.drop` str) . fromIntegral
+      return $ font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval }
+          where decoder (xStart, xEnd)
+                    | xEnd <= xStart = emptyGlyph
+                    | otherwise = 
+                        decodeWithDefault emptyGlyph $ chop xStart xEnd
+                chop start _ = LB.drop (fromIntegral start) str
+                locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
+                locationInterval = VU.zip locations $ VU.tail locationsAll
+
     getGlyph font _ = return font
 
     fetch font entry | _tdeTag entry == "loca" =
@@ -178,6 +210,7 @@ getGlyphIndexCurvesAtPointSize
         updateCoords (x,y) =
             (m * (am * x + cm *y + e), n * (bn * x + dn * y + f))
 
+    glyphExtract Glyph { _glyphContent = GlyphEmpty } = []
     glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
         concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
