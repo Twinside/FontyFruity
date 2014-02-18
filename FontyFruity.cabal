@@ -32,6 +32,7 @@ library
   build-depends: base >=4.6 && < 4.7
                , binary >= 0.5.0
                , bytestring >= 0.10
+               , containers
                , vector
 
 Executable test

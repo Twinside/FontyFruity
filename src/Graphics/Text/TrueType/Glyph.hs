@@ -35,15 +35,15 @@ data GlyphHeader = GlyphHeader
     { -- | If the number of contours is greater than or equal
       -- to zero, this is a single glyph; if negative, this is
       -- a composite glyph.
-      _glfNumberOfContours :: !Int16
+      _glfNumberOfContours :: {-# UNPACK #-} !Int16
       -- | Minimum x for coordinate data.
-    , _glfXMin             :: !Int16
+    , _glfXMin             :: {-# UNPACK #-} !Int16
       -- | Minimum y for coordinate data.
-    , _glfYMin             :: !Int16
+    , _glfYMin             :: {-# UNPACK #-} !Int16
       -- | Maximum x for coordinate data.
-    , _glfXMax             :: !Int16
+    , _glfXMax             :: {-# UNPACK #-} !Int16
       -- | Maximum y for coordinate data.
-    , _glfYMax             :: !Int16
+    , _glfYMax             :: {-# UNPACK #-} !Int16
     }
     deriving (Eq, Show)
 
@@ -66,27 +66,27 @@ data GlyphContour = GlyphContour
     deriving (Eq, Show)
 
 data CompositeScaling = CompositeScaling
-    { _a :: !Int16
-    , _b :: !Int16
-    , _c :: !Int16
-    , _d :: !Int16
-    , _e :: !Int16
-    , _f :: !Int16
+    { _a :: {-# UNPACK #-} !Int16
+    , _b :: {-# UNPACK #-} !Int16
+    , _c :: {-# UNPACK #-} !Int16
+    , _d :: {-# UNPACK #-} !Int16
+    , _e :: {-# UNPACK #-} !Int16
+    , _f :: {-# UNPACK #-} !Int16
     }
     deriving (Eq, Show)
 
 data GlyphComposition = GlyphComposition
-    { _glyphCompositeFlag    :: !Word16
-    , _glyphCompositeIndex   :: !Word16
-    , _glyphCompositionArg   :: !(Int16, Int16)
+    { _glyphCompositeFlag    :: {-# UNPACK #-} !Word16
+    , _glyphCompositeIndex   :: {-# UNPACK #-} !Word16
+    , _glyphCompositionArg   :: {-# UNPACK #-} !(Int16, Int16)
     , _glyphCompositionScale :: !CompositeScaling
     }
     deriving (Eq, Show)
 
 data GlyphContent
     = GlyphEmpty
-    | GlyphSimple    GlyphContour
-    | GlyphComposite (V.Vector GlyphComposition) (VU.Vector Word8)
+    | GlyphSimple    !GlyphContour
+    | GlyphComposite !(V.Vector GlyphComposition) !(VU.Vector Word8)
     deriving (Eq, Show)
 
 data Glyph = Glyph

@@ -61,7 +61,7 @@ import Graphics.Text.TrueType.MaxpTable
 import Graphics.Text.TrueType.Glyph
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
-{-import Graphics.Text.TrueType.CharacterMap-}
+import Graphics.Text.TrueType.CharacterMap
 
 {-import Debug.Trace-}
 
@@ -70,6 +70,7 @@ data Font = Font
     , _fontTables      :: ![(B.ByteString, B.ByteString)]
     , _fontHeader      :: Maybe FontHeader
     , _fontMaxp        :: Maybe MaxpTable
+    , _fontMap         :: Maybe CharacterMaps
     , _fontGlyph       :: Maybe (V.Vector Glyph)
     , _fontLoca        :: Maybe (VU.Vector Word32)
     }
@@ -83,6 +84,7 @@ emptyFont table = Font
     , _fontGlyph       = Nothing
     , _fontMaxp        = Nothing
     , _fontLoca        = Nothing
+    , _fontMap         = Nothing
     }
 
 decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
@@ -146,6 +148,10 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
     fetch font entry | _tdeTag entry == "maxp" = do
       table <- gotoOffset entry >> get
       return $ font { _fontMaxp = Just table }
+
+    fetch font entry | _tdeTag entry == "cmap" = do
+      table <- gotoOffset entry >> get
+      return $ font { _fontMap = Just table }
 
     fetch font entry = do
       let tableLength = fromIntegral $ _tdeLength entry
