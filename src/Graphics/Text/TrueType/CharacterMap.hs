@@ -1,10 +1,11 @@
 module Graphics.Text.TrueType.CharacterMap where
 
-import Control.Monad( replicateM )
+import Control.Monad( replicateM, forM )
 import Control.Applicative( (<$>), (<*>) )
 import Control.Monad( when )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
+                      , skip
                       , bytesRead
                       , getWord8
                       , getWord16be
@@ -18,6 +19,9 @@ import Data.Word( Word8, Word16, Word32 )
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
+
+{-import Debug.Trace-}
+{-import Text.Printf-}
 
 data TtfEncoding
   = EncodingSymbol
@@ -50,21 +54,39 @@ instance Binary TtfEncoding where
         6 -> return EncodingJohab
         _ -> fail "Unknown encoding"
 
-data CharacterMaps = CharacterMaps [CharacterTable]
+data CharacterMap = CharacterMap
+    { _charMapPlatformId       :: !Word16
+    , _charMapPlatformSpecific :: !Word16
+    , _charMap                 :: !CharacterTable
+    }
+    deriving (Eq, Show)
+
+newtype CharacterMaps = CharacterMaps [CharacterMap]
     deriving (Eq, Show)
 
 instance Binary CharacterMaps where
   put _ = fail "Unimplemented"
   get = do
+    startIndex <- bytesRead
     versionNumber <- getWord16be
     when (versionNumber /= 0)
          (fail "Characte map - invalid version number")
     tableCount <- fromIntegral <$> getWord16be
-    CharacterMaps <$> replicateM tableCount get
+    tableDesc <- replicateM tableCount $
+        (,,) <$> getWord16be <*> getWord16be <*> getWord32be
 
-data CharMapOffset = CharMapOffset 
+    tables <-
+      forM tableDesc $ \(platformId, platformSpecific, offset) -> do
+         currentOffset <- fromIntegral <$> bytesRead
+         let toSkip = fromIntegral offset - currentOffset + startIndex
+         when (toSkip > 0)
+              (skip $ fromIntegral toSkip)
+         CharacterMap platformId platformSpecific <$> get
+    return $ CharacterMaps tables
+
+data CharMapOffset = CharMapOffset
     { _cmoPlatformId :: !Word16
-    , _cmoEncodingId :: !TtfEncoding 
+    , _cmoEncodingId :: !TtfEncoding
     , _cmoOffset     :: !Word32
     }
     deriving (Eq, Show)
@@ -94,30 +116,32 @@ instance Binary Format4 where
       _entrySelector <- getWord16be
       -- (2 * segCount) - searchRange
       _rangeShift <- getWord16be
-     
+
       let fetcher :: Get (VU.Vector Int)
           fetcher =
             VU.replicateM segCount (fromIntegral <$> getWord16be)
+
       endCodes <- fetcher
       _reservedPad <- getWord16be
       startCodes <- fetcher
-      idDelta <- fetcher
+      idDelta <-
+          VU.replicateM segCount (fromIntegral <$> getWord16be) :: Get (VU.Vector Int16)
       idRangeOffset <- fetcher
-     
+
       tableBeginIndex <- bytesRead
-      let rangeInfo = init . VU.toList $
-              VU.zip5 startCodes endCodes idDelta idRangeOffset $
+      let idDeltaInt = VU.map fromIntegral idDelta
+          rangeInfo = init . VU.toList $
+              VU.zip5 startCodes endCodes idDeltaInt idRangeOffset $
                    VU.enumFromN 0 segCount
 
           indexLeft = fromIntegral $
-              (tableLength - (tableBeginIndex - startIndex))
+              (tableLength - (tableBeginIndex - startIndex + 2))
                   `div` 2
 
       indexTable <- VU.replicateM indexLeft getWord16be
 
       return . Format4 language . M.fromList
-             $ concatMap 
-                (prepare segCount indexTable) rangeInfo
+             $ concatMap (prepare segCount indexTable) rangeInfo
     where
       prepare _ _ (start, end, delta, 0, _) =
         [(fromIntegral $ char, fromIntegral $ char + delta)
@@ -129,23 +153,27 @@ instance Binary Format4 where
          , fromIntegral (if glyphId == 0 then 0 else glyphId + fromIntegral delta))
               | char <- [start .. end]
               , let index =
-                      (rangeOffset `div` 2) + char - start - ix
-                            + (segCount * 2)
-                    glyphId = indexTable VU.! index
+                      (rangeOffset `div` 2) + (char - start) + ix
+                            - segCount
+              , index < VU.length indexTable
+              , let glyphId = indexTable VU.! index
               ]
 
 data CharacterTable
-    = TableFormat0 !(VU.Vector Word8)
+    = TableFormat0 Word16 !(VU.Vector Word8)
     | TableFormat2 !Format2
     | TableFormat4 !Format4
+    | TableFormat6 !Format6
     | TableFormatUnknown !Word16
     deriving (Eq, Show)
 
 getFormat0 :: Get CharacterTable
-getFormat0 = TableFormat0 <$> do
-    count <- fromIntegral <$> getWord16be
-    _version <- getWord16be
-    VU.replicateM count getWord8
+getFormat0 = do
+    tableSize <- getWord16be
+    when (tableSize /= 262) $
+          fail "table cmap format 0 : invalid size"
+    lang <- getWord16be
+    TableFormat0 lang <$> VU.replicateM 256 getWord8
 
 data Format2SubHeader = Format2SubHeader
     { _f2SubCode       :: {-# UNPACK #-} !Word16
@@ -183,6 +211,22 @@ data Format2 = Format2
     }
     deriving (Eq, Show)
 
+data Format6 = Format6
+    { _format6Language   :: {-# UNPACK #-} !Word16
+    , _format6FirstCode  :: {-# UNPACK #-} !Word16
+    , _format6ArrayIndex :: !(VU.Vector Word16)
+    }
+    deriving (Eq, Show)
+
+instance Binary Format6 where
+    put _ = fail "Format6.put - unimplemented"
+    get = do
+        _length <- getWord16be
+        language <- getWord16be
+        firstCode <- getWord16be
+        entryCount <- fromIntegral <$> getWord16be
+        Format6 language firstCode <$> VU.replicateM entryCount getWord16be
+
 instance Binary CharacterTable where
     put _ = fail "Binary.put CharacterTable - Unimplemented"
     get = do
@@ -191,5 +235,6 @@ instance Binary CharacterTable where
         0 -> getFormat0
         2 -> TableFormat2 <$> get
         4 -> TableFormat4 <$> get
+        6 -> TableFormat6 <$> get
         n -> return $ TableFormatUnknown n
 

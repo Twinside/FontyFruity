@@ -9,7 +9,8 @@ import Text.Groom
 
 main :: IO ()
 main = do
-    font <- decodeFile "C:/Windows/Fonts/comic.ttf" :: IO Font
+    {-font <- decodeFile "C:/Windows/Fonts/comic.ttf" :: IO Font-}
+    font <- decodeFile "C:/Windows/Fonts/consola.ttf" :: IO Font
     putStrLn . groom
         $ font { _fontGlyph = Nothing
                , _fontTables = [(t, mempty) | (t, _) <- _fontTables font] }
