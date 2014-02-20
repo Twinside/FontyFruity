@@ -24,6 +24,7 @@ library
                , Graphics.Text.TrueType.Types
                , Graphics.Text.TrueType.OffsetTable
                , Graphics.Text.TrueType.CharacterMap
+               , Graphics.Text.TrueType.LanguageIds
   ghc-options: -Wall
   ghc-prof-options: -Wall -prof -auto-all
   hs-source-dirs:      src

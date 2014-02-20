@@ -29,6 +29,8 @@ import Data.Ord( comparing )
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
+import Graphics.Text.TrueType.LanguageIds
+
 {-import Debug.Trace-}
 {-import Text.Printf-}
 
@@ -80,7 +82,7 @@ type LangId = Word16
 ----            CharacterMaps
 --------------------------------------------------
 data CharacterMap = CharacterMap
-    { _charMapPlatformId       :: !Word16
+    { _charMapPlatformId       :: !PlatformId
     , _charMapPlatformSpecific :: !Word16
     , _charMap                 :: !CharacterTable
     }
@@ -101,7 +103,7 @@ instance Binary CharacterMaps where
          (fail "Characte map - invalid version number")
     tableCount <- fromIntegral <$> getWord16be
     tableDesc <- replicateM tableCount $
-        (,,) <$> getWord16be <*> getWord16be <*> getWord32be
+        (,,) <$> get <*> getWord16be <*> getWord32be
 
     tables <-
       forM tableDesc $ \(platformId, platformSpecific, offset) -> do
