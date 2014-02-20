@@ -166,6 +166,14 @@ instance Binary Font where
 type Dpi = Int
 type PointSize = Int
 
+getCharCurvesAtPointSize :: Font -> Dpi -> PointSize -> Char
+                         -> [VU.Vector (Float, Float)]
+getCharCurvesAtPointSize font@Font { _fontMap = Just mapping }
+                            dpi pointSize charValue =
+    getGlyphIndexCurvesAtPointSize font dpi pointSize $
+        findCharGlyph mapping 0 charValue
+getCharCurvesAtPointSize _ _ _ _ = []
+
 getGlyphIndexCurvesAtPointSize :: Font -> Dpi -> PointSize -> Int
                                -> [VU.Vector (Float, Float)]
 getGlyphIndexCurvesAtPointSize Font { _fontHeader = Nothing } _ _ _ = []
