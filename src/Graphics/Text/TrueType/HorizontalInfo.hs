@@ -1,5 +1,8 @@
-module Graphics.Text.TrueType.HorizontalHeader
+module Graphics.Text.TrueType.HorizontalInfo
     ( HorizontalHeader( .. )
+    , HorizontalMetricsTable( .. )
+    , HorizontalMetric( .. )
+    , getHorizontalMetrics
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
@@ -7,8 +10,9 @@ import Control.Monad( when, replicateM_ )
 import Data.Word( Word16 )
 import Data.Int( Int16 )
 import Data.Binary( Binary( .. ) )
-import Data.Binary.Get( getWord16be, getWord32be )
+import Data.Binary.Get( Get, getWord16be, getWord32be )
 import Data.Binary.Put( putWord16be, putWord32be )
+import qualified Data.Vector as V
 
 import Graphics.Text.TrueType.Types
 
@@ -71,3 +75,34 @@ instance Binary HorizontalHeader where
     replicateM_ 4 getWord16be -- reserved, don't care
     startHdr <$> (fromIntegral <$> getWord16be)
              <*> getWord16be
+
+data HorizontalMetric = HorizontalMetric
+    { _hmtxAdvanceWidth    :: {-# UNPACK #-} !Word16
+    , _hmtxLeftSideBearing :: {-# UNPACK #-} !Int16
+    }
+    deriving (Eq, Show)
+
+instance Binary HorizontalMetric where
+    put (HorizontalMetric adv bear) =
+      putWord16be adv >> putWord16be (fromIntegral bear)
+
+    get = HorizontalMetric <$> g16 <*> (fromIntegral <$> g16)
+      where g16 = getWord16be
+
+data HorizontalMetricsTable = HorizontalMetricsTable
+    { _glyphMetrics :: !(V.Vector HorizontalMetric)
+    }
+    deriving (Eq, Show)
+
+getHorizontalMetrics :: Int -- ^ Metrics count
+                     -> Int -- ^ Glyph count
+                     -> Get HorizontalMetricsTable
+getHorizontalMetrics numberOfMetrics glyphCount = do
+    hMetrics <- V.replicateM numberOfMetrics get
+    let lastAdvance = _hmtxAdvanceWidth $ V.last hMetrics
+    run <- V.replicateM sideBearingCount $
+        HorizontalMetric lastAdvance . fromIntegral <$> getWord16be
+    return $ HorizontalMetricsTable $ V.concat [hMetrics, run]
+  where
+    sideBearingCount = glyphCount - numberOfMetrics 
+

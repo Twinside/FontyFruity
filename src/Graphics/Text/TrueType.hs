@@ -5,29 +5,16 @@
 module Graphics.Text.TrueType
      where
 
-import Control.Applicative( (<$>)
-                          {-, (<*>)-}
-                          )
+import Control.Applicative( (<$>) )
 import Control.Monad( foldM )
-{-import Data.Bits( setBit, testBit )-}
 import Data.Function( on )
-{-import Data.Int( Int16 )-}
-import Data.List( sortBy
-                {-, foldl'-}
-                )
-import Data.Word(
-                  {-Word8-}
-                {-, Word16-}
-                 Word32
-                {-, Word64-}
-                )
+import Data.List( sortBy )
+import Data.Word( Word32 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead
-                      {-, getWord8-}
                       , getWord16be
                       , getWord32be
-                      {-, getWord64be-}
                       , getByteString
                       , getLazyByteString
                       , skip
@@ -42,17 +29,8 @@ import qualified Control.Exception as E
 import System.IO.Unsafe( unsafePerformIO )
 #endif
 
-{-import Data.Binary.Put( putWord8-}
-                      {-, putWord16be-}
-                      {-, putWord32be-}
-                      {-, putByteString-}
-                      {-)-}
-
-{-import Data.Monoid( mempty )-}
-
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as LB
-{-import qualified Data.ByteString.Char8 as BC-}
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
@@ -62,32 +40,34 @@ import Graphics.Text.TrueType.Glyph
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
-import Graphics.Text.TrueType.HorizontalHeader
+import Graphics.Text.TrueType.HorizontalInfo
 
 {-import Debug.Trace-}
 
 data Font = Font
-    { _fontOffsetTable      :: !OffsetTable
-    , _fontTables           :: ![(B.ByteString, B.ByteString)]
-    , _fontHeader           :: Maybe FontHeader
-    , _fontMaxp             :: Maybe MaxpTable
-    , _fontMap              :: Maybe CharacterMaps
-    , _fontGlyph            :: Maybe (V.Vector Glyph)
-    , _fontLoca             :: Maybe (VU.Vector Word32)
-    , _fontHorizontalHeader :: Maybe HorizontalHeader
+    { _fontOffsetTable       :: !OffsetTable
+    , _fontTables            :: ![(B.ByteString, B.ByteString)]
+    , _fontHeader            :: Maybe FontHeader
+    , _fontMaxp              :: Maybe MaxpTable
+    , _fontMap               :: Maybe CharacterMaps
+    , _fontGlyph             :: Maybe (V.Vector Glyph)
+    , _fontLoca              :: Maybe (VU.Vector Word32)
+    , _fontHorizontalHeader  :: Maybe HorizontalHeader
+    , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
     }
     deriving (Eq, Show)
 
 emptyFont :: OffsetTable -> Font
 emptyFont table = Font
-    { _fontTables           = []
-    , _fontOffsetTable      = table
-    , _fontHeader           = Nothing
-    , _fontGlyph            = Nothing
-    , _fontMaxp             = Nothing
-    , _fontLoca             = Nothing
-    , _fontMap              = Nothing
-    , _fontHorizontalHeader = Nothing
+    { _fontTables            = []
+    , _fontOffsetTable       = table
+    , _fontHeader            = Nothing
+    , _fontGlyph             = Nothing
+    , _fontMaxp              = Nothing
+    , _fontLoca              = Nothing
+    , _fontMap               = Nothing
+    , _fontHorizontalHeader  = Nothing
+    , _fontHorizontalMetrics = Nothing
     }
 
 decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
@@ -160,6 +140,14 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
     fetch font entry | _tdeTag entry == "hhea" = do
       table <- gotoOffset entry >> get
       return $ font { _fontHorizontalHeader = Just table }
+    fetch font@Font { _fontMaxp = Just maxp,
+                      _fontHorizontalHeader = Just hdr } entry
+        | _tdeTag entry == "hmtx" = do
+      gotoOffset entry
+      let metricCount = _hheaLongHorMetricCount hdr
+      table <- getHorizontalMetrics (fromIntegral metricCount) glyphCount
+      return font { _fontHorizontalMetrics = Just table }
+     where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
 
     fetch font entry = do
       let tableLength = fromIntegral $ _tdeLength entry
