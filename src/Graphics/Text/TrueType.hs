@@ -10,7 +10,7 @@ module Graphics.Text.TrueType
     , getStringCurveAtPoint
 
       -- * Types
-    , Font( .. )
+    , Font
     , Dpi
     , PointSize
     ) where
@@ -54,6 +54,7 @@ import Graphics.Text.TrueType.HorizontalInfo
 
 {-import Debug.Trace-}
 
+-- | Type representing a font.
 data Font = Font
     { _fontOffsetTable       :: !OffsetTable
     , _fontTables            :: ![(B.ByteString, B.ByteString)]
@@ -65,7 +66,6 @@ data Font = Font
     , _fontHorizontalHeader  :: Maybe HorizontalHeader
     , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
     }
-    deriving (Eq, Show)
 
 emptyFont :: OffsetTable -> Font
 emptyFont table = Font
@@ -89,11 +89,11 @@ loadFontFile filepath = decodeFont <$> LB.readFile filepath
 decodeFont :: LB.ByteString -> Either String Font
 decodeFont str =
 #if MIN_VERSION_binary(0,6,4)
-  case G.runGetOrFail get str of
+  case G.runGetOrFail getFont str of
     Left err -> Left $ show err
     Right (_, _, value) -> Right value
 #else
-  unsafePerformIO $ E.evaluate (return $ DB.decode str)
+  unsafePerformIO $ E.evaluate (return $ G.runGet getFont str)
     `E.catch` catcher
       where catcher :: E.SomeException -> IO (Either String a)
             catcher e = return . Left $ show e
@@ -184,9 +184,8 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
       return $ font { _fontTables =
                         (_tdeTag entry, rawData) : _fontTables font}
 
-instance Binary Font where
-  put _ = error "Binary.put Font - unimplemented"
-  get = get >>= fetchTables
+getFont :: Get Font
+getFont = get >>= fetchTables
 
 -- | Express device resolution in dot per inch.
 type Dpi = Int
