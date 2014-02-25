@@ -10,7 +10,7 @@ license-file:        LICENSE
 author:              Vincent Berthoux
 maintainer:          vincent.berthoux@gmail.com
 -- copyright:           
-category:            Graphics
+category:            Graphics, Text, Font
 build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
