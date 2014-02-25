@@ -50,7 +50,7 @@ data FontHeader = FontHeader
       -- | Bit 0 bold (if set to 1); Bit 1 italic (if set to 1)
     , _fHdrMacStyle         :: !Word16
       -- | Smallest readable size in pixels.
-    , _fHdrLowestRecPPEM     :: !Word16
+    , _fHdrLowestRecPPEM    :: !Word16
 
       -- | 0   Fully mixed directional glyphs;
       --  1   Only strongly left to right;

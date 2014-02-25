@@ -2,13 +2,23 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+-- | Module in charge of loading fonts.
 module Graphics.Text.TrueType
-     where
+    ( -- * Functions
+      decodeFont
+    , loadFontFile
+    , getStringCurveAtPoint
+
+      -- * Types
+    , Font( .. )
+    , Dpi
+    , PointSize
+    ) where
 
 import Control.Applicative( (<$>) )
 import Control.Monad( foldM )
 import Data.Function( on )
-import Data.List( sortBy )
+import Data.List( sortBy, mapAccumL )
 import Data.Word( Word32 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
@@ -69,6 +79,25 @@ emptyFont table = Font
     , _fontHorizontalHeader  = Nothing
     , _fontHorizontalMetrics = Nothing
     }
+
+-- | Load a font file, the file path must be pointing
+-- to the true type file (.ttf)
+loadFontFile :: FilePath -> IO (Either String Font)
+loadFontFile filepath = decodeFont <$> LB.readFile filepath
+
+-- | Decode a in-memory true type file.
+decodeFont :: LB.ByteString -> Either String Font
+decodeFont str =
+#if MIN_VERSION_binary(0,6,4)
+  case G.runGetOrFail get str of
+    Left err -> Left $ show err
+    Right (_, _, value) -> Right value
+#else
+  unsafePerformIO $ E.evaluate (return $ DB.decode str)
+    `E.catch` catcher
+      where catcher :: E.SomeException -> IO (Either String a)
+            catcher e = return . Left $ show e
+#endif
 
 decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
 decodeWithDefault defaultValue str =
@@ -159,45 +188,79 @@ instance Binary Font where
   put _ = error "Binary.put Font - unimplemented"
   get = get >>= fetchTables
 
+-- | Express device resolution in dot per inch.
 type Dpi = Int
+
+-- | Font size expressed in points.
 type PointSize = Int
 
-getCharCurvesAtPointSize :: Font -> Dpi -> PointSize -> Char
-                         -> [VU.Vector (Float, Float)]
-getCharCurvesAtPointSize font@Font { _fontMap = Just mapping }
-                            dpi pointSize charValue =
-    getGlyphIndexCurvesAtPointSize font dpi pointSize $
-        findCharGlyph mapping 0 charValue
-getCharCurvesAtPointSize _ _ _ _ = []
+glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
+glyphOfStrings Font { _fontMap = Just mapping
+                    , _fontGlyph = Just glyphes
+                    , _fontHorizontalMetrics = Just hmtx } str = fetcher . findCharGlyph mapping 0 <$> str
+  where
+    fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
+glyphOfStrings _ _ = []
 
-getGlyphIndexCurvesAtPointSize :: Font -> Dpi -> PointSize -> Int
-                               -> [VU.Vector (Float, Float)]
-getGlyphIndexCurvesAtPointSize Font { _fontHeader = Nothing } _ _ _ = []
-getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Nothing } _ _ _ = []
-getGlyphIndexCurvesAtPointSize Font { _fontGlyph = Just allGlyphs } _ _ idx
-    | idx >= V.length allGlyphs = []
-getGlyphIndexCurvesAtPointSize
-    Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs } dpi pointSize globalIndex =
-        glyphReverse (_glyphHeader glyphAtIndex) <$> go globalIndex
+-- | Extract a list of outlines for every char in the string.
+-- The given curves are in an image like coordinate system,
+-- with the origin point in the upper left corner.
+getStringCurveAtPoint :: Dpi            -- ^ Dot per inch of the output.
+                      -> (Float, Float) -- ^ Initial position of the baseline.
+                      -> [(Font, PointSize, String)] -- ^ Text to draw
+                      -> [[VU.Vector (Float, Float)]] -- ^ List of contours for each char
+getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where 
+  glyphes = concat [ (font, size, unitsPerEm font,) <$> glyphOfStrings font str | (font, size, str) <- lst]
+
+  unitsPerEm Font { _fontHeader = Just hdr } = fromIntegral $ _fUnitsPerEm hdr
+  unitsPerEm  _ = 1
+
+  toPixel (_, pointSize, emSize, _) v = fromIntegral v * pixelSize / emSize
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  toFCoord (_, pointSize, emSize, _) v = floor $ v * emSize / pixelSize
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  maximumSize = maximum [ toPixel p . _glfYMax $ _glyphHeader glyph
+                                | p@(_, _, _, (glyph, _)) <- glyphes ]
+
+  go (xf, yf) p@(font, pointSize, _, (glyph, metric)) = ((toPixel p $ xi + advance, yf), curves)
+    where
+      (xi, yi) = (toFCoord p xf, toFCoord p yf)
+      bearing = fromIntegral $ _hmtxLeftSideBearing metric
+      advance = fromIntegral $ _hmtxAdvanceWidth metric
+      curves =
+          getGlyphIndexCurvesAtPointSizeAndPos font dpi (toFCoord p maximumSize)
+            (pointSize, glyph) (xi + bearing, yi)
+
+
+getGlyphIndexCurvesAtPointSizeAndPos :: Font -> Dpi -> Int -> (PointSize, Glyph) -> (Int, Int)
+                                     -> [VU.Vector (Float, Float)]
+getGlyphIndexCurvesAtPointSizeAndPos Font { _fontHeader = Nothing } _ _ _ _ = []
+getGlyphIndexCurvesAtPointSizeAndPos Font { _fontGlyph = Nothing } _ _ _ _ = []
+getGlyphIndexCurvesAtPointSizeAndPos
+    Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs }
+        dpi maximumSize (pointSize, topGlyph) (baseX, baseY) = glyphReverse <$> glyphExtract topGlyph
   where
     go index | index >= V.length allGlyphs = []
              | otherwise = glyphExtract $ allGlyphs V.! index
 
-    glyphAtIndex = allGlyphs V.! globalIndex
     pixelSize = fromIntegral (pointSize * dpi) / 72
-    recurse = go . fromIntegral
     emSize = fromIntegral $ _fUnitsPerEm hdr
 
-    glyphReverse GlyphHeader { _glfYMax = yMax } =
-        VU.map (\(x,y) -> (x, yF - y))
-          where yF = toPixelCoordinate yMax
+    maxiF = toPixelCoordinate (0 :: Int) maximumSize
+    baseYF = toPixelCoordinate (0 :: Int) baseY
 
-    toPixelCoordinate coord =
-        (fromIntegral coord * pixelSize) / emSize
+    glyphReverse = VU.map (\(x,y) -> (x, maxiF - y + baseYF))
+
+    toPixelCoordinate shift coord =
+        (fromIntegral (shift + fromIntegral coord) * pixelSize) / emSize
 
     composeGlyph composition = VU.map updateCoords <$> subCurves
       where
-        subCurves = recurse $ _glyphCompositeIndex composition
+        subCurves = go . fromIntegral $ _glyphCompositeIndex composition
         toFloat v = fromIntegral v / (0x4000 :: Float)
         CompositeScaling ai bi ci di ei fi = _glyphCompositionScale composition
 
@@ -224,6 +287,6 @@ getGlyphIndexCurvesAtPointSize
     glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
         concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
-        [ VU.map (\(x, y) -> (toPixelCoordinate x, toPixelCoordinate y)) c
+        [ VU.map (\(x, y) -> (toPixelCoordinate baseX x, toPixelCoordinate (0 :: Int) y)) c
                 | c <- extractFlatOutline countour]
 
