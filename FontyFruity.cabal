@@ -2,9 +2,13 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                FontyFruity
-version:             0.1
+version:             0.1.0.1
 synopsis:            A true type file format loader
--- description:         
+description:         
+    An haskell Truetype file parser.
+    .
+    You can load a font file and extract some curves to be
+    drawed with a library like Rasterific .
 license:             BSD3
 license-file:        LICENSE
 author:              Vincent Berthoux
@@ -16,6 +20,16 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 extra-source-files: changelog
+
+Source-Repository head
+    Type:      git
+    Location:  https://github.com/Twinside/FontyFruity.git
+
+Source-Repository this
+    Type:      git
+    Location:  https://github.com/Twinside/FontyFruity.git
+    Tag:       v0.1.0.1
+
 
 library
   exposed-modules: Graphics.Text.TrueType
