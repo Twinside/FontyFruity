@@ -33,6 +33,7 @@ import Data.Binary.Get( Get
 #if MIN_VERSION_binary(0,6,4)
 import qualified Data.Binary.Get as G
 #else
+import qualified Data.Binary.Get as G
 import qualified Data.Binary as DB
 import qualified Control.Exception as E
 -- I feel so dirty. :(
