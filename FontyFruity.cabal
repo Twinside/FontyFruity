@@ -28,7 +28,7 @@ Source-Repository head
 Source-Repository this
     Type:      git
     Location:  https://github.com/Twinside/FontyFruity.git
-    Tag:       v0.1.0.3
+    Tag:       v0.1.0.4
 
 
 library
