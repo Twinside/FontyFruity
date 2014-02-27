@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.1.0.4 February 2014
+ * Fixing hackage's haddock generation
+
 v0.1.0.3 February 2014
  * Dropping base upper bound.
 

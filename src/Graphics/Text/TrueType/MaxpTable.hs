@@ -1,4 +1,4 @@
-module Graphics.Text.TrueType.MaxpTable ( MaxpTable( .. ) ) where
+module Graphics.Text.TrueType.MaxpTable( MaxpTable( .. ) ) where
 
 import Control.Applicative( (<$>), (<*>) )
 import Data.Word( Word16 )
@@ -34,7 +34,7 @@ data MaxpTable = MaxpTable
     , _maxpmaxStackElements :: !Word16
     -- | Maximum byte count for glyph instructions.
     , _maxpmaxSizeOfInstructions :: !Word16
-    -- | Maximum number of components referenced at “top level” for any composite glyph.
+    -- | Maximum number of components referenced at "top level" for any composite glyph.
     , _maxpmaxComponentElements :: !Word16
     -- | Maximum levels of recursion; 1 for simple components.
     , _maxpmaxComponentDepth :: !Word16
