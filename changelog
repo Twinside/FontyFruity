@@ -1,8 +1,14 @@
 -*-change-log-*-
 
-v0.1.0.1
+v0.1.0.3 February 2014
+ * Dropping base upper bound.
+
+v0.1.0.2 February 2014
+ * Fixing compilation with old version of binary.
+
+v0.1.0.1 February 2014
  * Fixing some missing information in the cabal file.
 
-v0.1
- * Initial version
+v0.1 February 2014
+ * Initial version.
 
