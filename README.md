@@ -1,6 +1,8 @@
 FontyFruity
 ===========
 
+[![Build Status](https://travis-ci.org/Twinside/FontyFruity.png?branch=master)](https://travis-ci.org/Twinside/FontyFruity)
+
 An haskell Truetype file parser.
 
 You can load a font file and extract some curves
