@@ -1,11 +1,18 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Bytecode where
 
 import Prelude hiding ( EQ, GT, LT )
 import Control.Applicative( (<$>) )
+{-import Control.Monad.State.Strict( modify )-}
 import Data.Bits( (.&.), testBit )
-import Data.Word( Word8, Word16 )
 import Data.Binary.Get( Get, getWord8, getWord16be )
+import Data.Monoid( mempty )
+import Data.Int( Int32 )
+import qualified Data.Map as M
+import Data.Word( Word8, Word16 )
 import qualified Data.Vector.Unboxed as VU
+
+import Graphics.Text.TrueType.Types
 
 type InstructionFlag = Bool
 
@@ -170,6 +177,33 @@ data DistanceKeeping
     = DistanceFree
     | DistanceGreaterThanMin
     deriving (Eq, Show)
+
+data ByteCodeProgram
+    = If     [ByteCodeProgram]
+    | IfElse [ByteCodeProgram] [ByteCodeProgram]
+    | Function [ByteCodeProgram]
+    | Sequence [Instruction]
+    deriving (Eq, Show)
+
+instructionToProgram :: [Instruction]-> [ByteCodeProgram]
+instructionToProgram = firstOfThird . go []
+  where
+    firstOfThird (f, _, _) = f
+
+    go acc [] = (reverse acc, [], [])
+    go acc (IF : rest) =
+      case go [] rest of
+        (ifBranch, [], final) -> go (If ifBranch : acc) final
+        (ifBranch, elseBranch, final) ->
+            go (IfElse ifBranch elseBranch : acc) final
+    go acc (EIF : rest) = (reverse acc, [], rest)
+    go acc (ELSE : rest) = (acc, elseBranch, final)
+      where (elseBranch, _, final) = go [] rest
+    go acc (FDEF : rest) = go (Function def: acc) final
+      where (def, _, final) = go [] rest
+    go acc (ENDF : rest) = (reverse acc, [], rest)
+    go acc (x : xs) = go (Sequence [x] : acc) xs
+
 
 inRange :: Ord a => a -> (a, a) -> Bool
 inRange v (lo, hi) = lo <= v && v <= hi
@@ -340,4 +374,72 @@ getInstr = getWord8 >>= go
       0x44 -> return WCVTP
       0x42 -> return WS
       _ -> fail "instruction reader coverage pleaser"
+
+type Point = (F26Dot6, F26Dot6)
+
+data GraphicalState = GraphicalState
+    { _stAutoFlip           :: !Bool
+    , _stCutIn              :: {-# UNPACK #-} !F26Dot6
+    , _stDeltaBase          :: {-# UNPACK #-} !Int32
+    , _stDeltaShift         :: {-# UNPACK #-} !Int32
+    , _stDualProjection     :: !(Maybe Point)
+    , _stFreedomVector      :: !Point
+    , _stInstructionControl :: !Bool
+    , _stLoop               :: {-# UNPACK #-} !Int32
+    , _stMinDistance        :: {-# UNPACK #-} !F26Dot6
+    , _stProjectionVector   :: !Point
+    , _stRoundState         :: {-# UNPACK #-} !Int32
+    , _stRp0                :: {-# UNPACK #-} !Int32
+    , _stRp1                :: {-# UNPACK #-} !Int32
+    , _stRp2                :: {-# UNPACK #-} !Int32
+    , _stScanControl        :: !Bool
+    , _stSingleWidthCutIn   :: {-# UNPACK #-} !F26Dot6
+    , _stSingleWidthValue   :: {-# UNPACK #-} !F26Dot6
+    , _stZp0                :: {-# UNPACK #-} !Int32
+    , _stZp1                :: {-# UNPACK #-} !Int32
+    , _stZp2                :: {-# UNPACK #-} !Int32
+    , _stFunctions          :: !(M.Map Int32 [ByteCodeProgram])
+    }
+    deriving (Eq, Show)
+
+initialState :: GraphicalState
+initialState = GraphicalState
+    { _stAutoFlip  = True
+    , _stCutIn     = 17 / 16
+    , _stDeltaBase = 9
+    , _stDeltaShift = 3
+    , _stDualProjection = Nothing
+    , _stFreedomVector = (1, 0)
+    , _stInstructionControl = False
+    , _stLoop = 1
+    , _stMinDistance = 1
+    , _stProjectionVector = (1, 0)
+    , _stRoundState = 1
+    , _stRp0 = 0
+    , _stRp1 = 0
+    , _stRp2 = 0
+    , _stScanControl = False
+    , _stSingleWidthCutIn = 0
+    , _stSingleWidthValue = 0
+    , _stZp0 = 1
+    , _stZp1 = 1
+    , _stZp2 = 1
+    , _stFunctions = mempty
+    }
+
+#if 0
+
+evaluate :: [ByteCodeProgram] -> ()
+evaluate instrs =
+  where
+    byteExec []                        stack = stack
+    byteExec (If        _ : instr) (0:stack) = byteExec instr stack
+    byteExec (If thenBody : instr) (_:stack) = byteExec (thenBody ++ instr) stack
+    byteExec (IfElse _ elseBody)   (0:stack) = byteExec (elseBody ++ instr) stack
+    byteExec (IfElse thenBody _)   (_:stack) = byteExec (thenBody ++ instr) stack
+    byteExec (Function functionBody : instr) (id:stack) =
+        modify (\s -> s { _stFunctions = M.add id functionBody }) >> byteExec instr stack
+    byteExec (Sequence intructions : rest) stack = go instructions stack >>= byteExec rest
+
+#endif
 
