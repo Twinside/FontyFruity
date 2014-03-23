@@ -10,7 +10,7 @@ module Graphics.Text.TrueType
     , getStringCurveAtPoint
 
       -- * Types
-    , Font
+    , Font( .. )
     , Dpi
     , PointSize
     ) where
@@ -67,6 +67,7 @@ data Font = Font
     , _fontHorizontalHeader  :: Maybe HorizontalHeader
     , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
     }
+    deriving (Show)
 
 emptyFont :: OffsetTable -> Font
 emptyFont table = Font

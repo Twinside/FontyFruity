@@ -6,9 +6,9 @@ module Graphics.Text.TrueType.CharacterMap
     , findCharGlyph
     ) where
 
-import Control.Monad( replicateM, forM )
+import Control.Monad( replicateM )
 import Control.Applicative( (<$>), (<*>) )
-import Control.Monad( when )
+import Control.Monad( when, foldM )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , skip
@@ -21,7 +21,7 @@ import Data.Binary.Put( putWord16be
                       , putWord32be )
 import Data.Int( Int16 )
 import Data.List( find, sortBy )
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Data.Maybe( fromMaybe )
 import Data.Word( Word8, Word16, Word32 )
 import Data.Ord( comparing )
@@ -30,9 +30,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
 
 import Graphics.Text.TrueType.LanguageIds
-
-{-import Debug.Trace-}
-{-import Text.Printf-}
 
 --------------------------------------------------
 ----            TtfEncoding
@@ -97,22 +94,30 @@ newtype CharacterMaps = CharacterMaps [CharacterMap]
 instance Binary CharacterMaps where
   put _ = fail "Unimplemented"
   get = do
-    startIndex <- bytesRead
-    versionNumber <- getWord16be
-    when (versionNumber /= 0)
-         (fail "Characte map - invalid version number")
-    tableCount <- fromIntegral <$> getWord16be
-    tableDesc <- replicateM tableCount $
-        (,,) <$> get <*> getWord16be <*> getWord32be
+      startIndex <- bytesRead
+      versionNumber <- getWord16be
+      when (versionNumber /= 0)
+           (fail "Characte map - invalid version number")
+      tableCount <- fromIntegral <$> getWord16be
+      tableDesc <- replicateM tableCount $
+          (,,) <$> get <*> getWord16be <*> getWord32be
 
-    tables <-
-      forM tableDesc $ \(platformId, platformSpecific, offset) -> do
-         currentOffset <- fromIntegral <$> bytesRead
-         let toSkip = fromIntegral offset - currentOffset + startIndex
-         when (toSkip > 0)
-              (skip $ fromIntegral toSkip)
-         CharacterMap platformId platformSpecific <$> get
-    return . CharacterMaps $ sortBy (comparing _charMap) tables
+      let fetcher (allMaps, lst) (platformId, platformSpecific, offset)
+              | M.member offset allMaps = case M.lookup offset allMaps of
+                  Nothing -> fail "Impossible"
+                  Just table ->
+                      return (allMaps, CharacterMap platformId platformSpecific table : lst)
+          fetcher (allMaps, lst) (platformId, platformSpecific, offset) = do
+              currentOffset <- fromIntegral <$> bytesRead
+              let toSkip = fromIntegral offset - currentOffset + startIndex
+              when (toSkip > 0)
+                  (skip $ fromIntegral toSkip)
+              mapData <- get
+              let charMap = CharacterMap platformId platformSpecific mapData
+              return (M.insert offset mapData allMaps, charMap : lst)
+ 
+      (_, tables) <- foldM fetcher (M.empty, []) tableDesc
+      return . CharacterMaps $ sortBy (comparing _charMap) tables
 
 data CharMapOffset = CharMapOffset
     { _cmoPlatformId :: !Word16
@@ -242,6 +247,14 @@ instance Binary Format4 where
 
       indexTable <- VU.replicateM indexLeft getWord16be
 
+      endIndex <- bytesRead
+      let toSkip = endIndex - startIndex - tableLength + 2
+      if toSkip < 0 then
+        fail $ "Read to much Format4 table " ++ show toSkip
+      else
+        skip $ fromIntegral toSkip
+
+
       return . Format4 language . M.fromList
              $ concatMap (prepare segCount indexTable) rangeInfo
     where
@@ -283,7 +296,8 @@ instance Binary Format0 where
     get = do
         tableSize <- getWord16be
         when (tableSize /= 262) $
-            fail "table cmap format 0 : invalid size"
+            fail ("table cmap format 0, invalid size: "
+                    ++ show tableSize)
         Format0 <$> getWord16be <*> VU.replicateM 256 getWord8
 
 --------------------------------------------------
