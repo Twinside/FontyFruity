@@ -42,6 +42,7 @@ library
                , Graphics.Text.TrueType.CharacterMap
                , Graphics.Text.TrueType.LanguageIds
                , Graphics.Text.TrueType.HorizontalInfo
+               , Graphics.Text.TrueType.Name
 
   ghc-options: -Wall -O2
   ghc-prof-options: -Wall -prof -auto-all

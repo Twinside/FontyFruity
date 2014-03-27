@@ -53,6 +53,7 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
 import Graphics.Text.TrueType.HorizontalInfo
+import Graphics.Text.TrueType.Name
 
 {-import Debug.Trace-}
 
@@ -60,6 +61,7 @@ import Graphics.Text.TrueType.HorizontalInfo
 data Font = Font
     { _fontOffsetTable       :: !OffsetTable
     , _fontTables            :: ![(B.ByteString, B.ByteString)]
+    , _fontNames             :: Maybe NameTable
     , _fontHeader            :: Maybe FontHeader
     , _fontMaxp              :: Maybe MaxpTable
     , _fontMap               :: Maybe CharacterMaps
@@ -74,6 +76,7 @@ emptyFont :: OffsetTable -> Font
 emptyFont table = Font
     { _fontTables            = []
     , _fontOffsetTable       = table
+    , _fontNames             = Nothing
     , _fontHeader            = Nothing
     , _fontGlyph             = Nothing
     , _fontMaxp              = Nothing
@@ -168,6 +171,10 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
     fetch font entry | _tdeTag entry == "cmap" = do
       table <- gotoOffset entry >> get
       return $ font { _fontMap = Just table }
+
+    fetch font entry | _tdeTag entry == "name" = do
+      table <- gotoOffset entry >> get
+      return $ font { _fontNames = Just table }
 
     fetch font entry | _tdeTag entry == "hhea" = do
       table <- gotoOffset entry >> get
