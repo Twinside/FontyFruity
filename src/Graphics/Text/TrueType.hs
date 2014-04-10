@@ -217,6 +217,9 @@ unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
 unitsPerEm  _ = 1
 
+-- | Compute the bounding box of a string displayed with a font at
+-- a given size. The resulting coordinate represent the width and the
+-- height in pixels.
 stringBoundingBox :: Font -> Dpi -> PointSize -> String -> (Float, Float)
 stringBoundingBox font dpi size str =
     foldl' go (0, 0) $ glyphOfStrings font str
