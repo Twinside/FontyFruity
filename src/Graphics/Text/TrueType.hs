@@ -8,9 +8,10 @@ module Graphics.Text.TrueType
       decodeFont
     , loadFontFile
     , getStringCurveAtPoint
+    , stringBoundingBox
 
       -- * Types
-    , Font
+    , Font( .. )
     , Dpi
     , PointSize
     ) where
@@ -18,8 +19,8 @@ module Graphics.Text.TrueType
 import Control.Applicative( (<$>) )
 import Control.Monad( foldM )
 import Data.Function( on )
-import Data.List( sortBy, mapAccumL )
-import Data.Word( Word32 )
+import Data.List( sortBy, mapAccumL, foldl' )
+import Data.Word( Word16, Word32 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead
@@ -52,6 +53,7 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
 import Graphics.Text.TrueType.HorizontalInfo
+import Graphics.Text.TrueType.Name
 
 {-import Debug.Trace-}
 
@@ -59,6 +61,7 @@ import Graphics.Text.TrueType.HorizontalInfo
 data Font = Font
     { _fontOffsetTable       :: !OffsetTable
     , _fontTables            :: ![(B.ByteString, B.ByteString)]
+    , _fontNames             :: Maybe NameTable
     , _fontHeader            :: Maybe FontHeader
     , _fontMaxp              :: Maybe MaxpTable
     , _fontMap               :: Maybe CharacterMaps
@@ -67,11 +70,13 @@ data Font = Font
     , _fontHorizontalHeader  :: Maybe HorizontalHeader
     , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
     }
+    deriving (Show)
 
 emptyFont :: OffsetTable -> Font
 emptyFont table = Font
     { _fontTables            = []
     , _fontOffsetTable       = table
+    , _fontNames             = Nothing
     , _fontHeader            = Nothing
     , _fontGlyph             = Nothing
     , _fontMaxp              = Nothing
@@ -119,7 +124,7 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
                     . V.toList
                     $ _otEntries tables
     gotoOffset entry = do
-        readed <- bytesRead 
+        readed <- bytesRead
         let toDrop = fromIntegral (_tdeOffset entry) - readed
         if toDrop < 0 then fail "Weirdo weird"
         else skip $ fromIntegral toDrop
@@ -139,7 +144,7 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
       return $ font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval }
           where decoder (xStart, xEnd)
                     | xEnd <= xStart = emptyGlyph
-                    | otherwise = 
+                    | otherwise =
                         decodeWithDefault emptyGlyph $ chop xStart xEnd
                 chop start _ = LB.drop (fromIntegral start) str
                 locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
@@ -166,6 +171,10 @@ fetchTables tables = foldM fetch (emptyFont tables) tableList
     fetch font entry | _tdeTag entry == "cmap" = do
       table <- gotoOffset entry >> get
       return $ font { _fontMap = Just table }
+
+    fetch font entry | _tdeTag entry == "name" = do
+      table <- gotoOffset entry >> get
+      return $ font { _fontNames = Just table }
 
     fetch font entry | _tdeTag entry == "hhea" = do
       table <- gotoOffset entry >> get
@@ -197,10 +206,35 @@ type PointSize = Int
 glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
 glyphOfStrings Font { _fontMap = Just mapping
                     , _fontGlyph = Just glyphes
-                    , _fontHorizontalMetrics = Just hmtx } str = fetcher . findCharGlyph mapping 0 <$> str
+                    , _fontHorizontalMetrics = Just hmtx } str =
+    fetcher . findCharGlyph mapping 0 <$> str
   where
     fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
 glyphOfStrings _ _ = []
+
+unitsPerEm :: Font -> Word16
+unitsPerEm Font { _fontHeader = Just hdr } =
+    fromIntegral $ _fUnitsPerEm hdr
+unitsPerEm  _ = 1
+
+-- | Compute the bounding box of a string displayed with a font at
+-- a given size. The resulting coordinate represent the width and the
+-- height in pixels.
+stringBoundingBox :: Font -> Dpi -> PointSize -> String -> (Float, Float)
+stringBoundingBox font dpi size str =
+    foldl' go (0, 0) $ glyphOfStrings font str
+  where
+    emSize = fromIntegral $ unitsPerEm font
+
+    toPixel v = fromIntegral v * pixelSize / emSize
+      where pixelSize = fromIntegral (size * dpi) / 72
+
+    go (xf, yf) (glyph, metric) = (width', height')
+      where
+        advance = _hmtxAdvanceWidth metric
+        width' = xf + toPixel advance
+        height' = max yf . toPixel . _glfYMax $ _glyphHeader glyph
+
 
 -- | Extract a list of outlines for every char in the string.
 -- The given curves are in an image like coordinate system,
@@ -209,11 +243,9 @@ getStringCurveAtPoint :: Dpi            -- ^ Dot per inch of the output.
                       -> (Float, Float) -- ^ Initial position of the baseline.
                       -> [(Font, PointSize, String)] -- ^ Text to draw
                       -> [[VU.Vector (Float, Float)]] -- ^ List of contours for each char
-getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where 
-  glyphes = concat [ (font, size, unitsPerEm font,) <$> glyphOfStrings font str | (font, size, str) <- lst]
-
-  unitsPerEm Font { _fontHeader = Just hdr } = fromIntegral $ _fUnitsPerEm hdr
-  unitsPerEm  _ = 1
+getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
+  glyphes = concat [(font, size, fromIntegral $ unitsPerEm font,)
+                            <$> glyphOfStrings font str | (font, size, str) <- lst]
 
   toPixel (_, pointSize, emSize, _) v = fromIntegral v * pixelSize / emSize
     where
