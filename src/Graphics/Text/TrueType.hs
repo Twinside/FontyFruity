@@ -17,7 +17,7 @@ module Graphics.Text.TrueType
     ) where
 
 import Control.Applicative( (<$>) )
-import Control.Monad( foldM )
+import Control.Monad( foldM, forM )
 import Data.Function( on )
 import Data.List( sortBy, mapAccumL, foldl' )
 import Data.Word( Word16, Word32 )
@@ -26,7 +26,6 @@ import Data.Binary.Get( Get
                       , bytesRead
                       , getWord16be
                       , getWord32be
-                      , getByteString
                       , getLazyByteString
                       , skip
                       )
@@ -35,13 +34,12 @@ import Data.Binary.Get( Get
 import qualified Data.Binary.Get as G
 #else
 import qualified Data.Binary.Get as G
-import qualified Data.Binary as DB
 import qualified Control.Exception as E
 -- I feel so dirty. :(
 import System.IO.Unsafe( unsafePerformIO )
 #endif
 
-import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Vector as V
 import qualified Data.Vector.Unboxed as VU
@@ -91,108 +89,122 @@ emptyFont table = Font
 loadFontFile :: FilePath -> IO (Either String Font)
 loadFontFile filepath = decodeFont <$> LB.readFile filepath
 
--- | Decode a in-memory true type file.
-decodeFont :: LB.ByteString -> Either String Font
-decodeFont str =
+getOrFail :: Get a -> LB.ByteString -> Either String a
+getOrFail getter str =
 #if MIN_VERSION_binary(0,6,4)
-  case G.runGetOrFail getFont str of
+  case G.runGetOrFail getter str of
     Left err -> Left $ show err
     Right (_, _, value) -> Right value
 #else
-  unsafePerformIO $ E.evaluate (return $ G.runGet getFont str)
+  unsafePerformIO $ E.evaluate (return $ G.runGet getter str)
     `E.catch` catcher
       where catcher :: E.SomeException -> IO (Either String a)
             catcher e = return . Left $ show e
 #endif
 
+-- | Decode a in-memory true type file.
+decodeFont :: LB.ByteString -> Either String Font
+decodeFont = getOrFail getFont
+
 decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
 decodeWithDefault defaultValue str =
-#if MIN_VERSION_binary(0,6,4)
-  case G.runGetOrFail get str of
-    Left _ -> defaultValue
-    Right (_, _, value) -> value
-#else
-  unsafePerformIO $ E.evaluate (DB.decode str) `E.catch` catcher
-      where catcher :: E.SomeException -> IO a
-            catcher _ = return defaultValue
-#endif
+    case getOrFail get str of
+      Left _ -> defaultValue
+      Right v -> v
+
+gotoOffset :: TableDirectoryEntry -> Get ()
+gotoOffset entry = do
+    readed <- bytesRead
+    let toDrop = fromIntegral (_tdeOffset entry) - readed
+    if toDrop < 0 then fail "Weirdo weird"
+    else skip $ fromIntegral toDrop
+
+getLoca :: Font -> Get Font
+getLoca font@(Font { _fontMaxp = Just maxp, _fontHeader = Just hdr })
+  | _fHdrIndexToLocFormat hdr == 0 = do
+      v <- VU.replicateM glyphCount
+            ((* 2) . fromIntegral <$> getWord16be)
+      return font { _fontLoca = Just v }
+  | otherwise = do
+      v <- VU.replicateM glyphCount getWord32be
+      return font { _fontLoca = Just v }
+  where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
+getLoca font = return font
+
+getGlyph :: Font -> LB.ByteString -> Get Font
+getGlyph font@(Font { _fontLoca = Just locations }) str =
+
+  return font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval } 
+      where decoder (xStart, xEnd)
+                | xEnd <= xStart = emptyGlyph
+                | otherwise =
+                    decodeWithDefault emptyGlyph $ chop xStart xEnd
+            chop start _ = LB.drop (fromIntegral start) str
+            locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
+            locationInterval = VU.zip locations $ VU.tail locationsAll
+getGlyph font _ = return font
+
+getHmtx :: Font -> Get Font
+getHmtx font@Font { _fontMaxp = Just maxp,
+                    _fontHorizontalHeader = Just hdr } = do
+  let metricCount = _hheaLongHorMetricCount hdr
+      glyphCount = fromIntegral $ _maxpnumGlyphs maxp
+  table <- getHorizontalMetrics (fromIntegral metricCount) glyphCount
+  return font { _fontHorizontalMetrics = Just table }
+getHmtx font = return font
 
 fetchTables :: OffsetTable -> Get Font
-fetchTables tables = foldM fetch (emptyFont tables) tableList
+fetchTables offsetTable = do
+    let sortedTables =
+            sortBy (compare `on` _tdeOffset) . V.toList $ _otEntries offsetTable
+    tableData <-
+      forM sortedTables $ \entry -> do
+          gotoOffset entry
+          (B.unpack $ _tdeTag entry,) <$> getLazyByteString (fromIntegral $ _tdeLength entry)
+
+    foldM (fetch tableData) (emptyFont offsetTable)
+          ["head" :: String, "maxp", "cmap", "name", "hhea",  "loca", "glyf", "hmtx"]
   where
-    tableList = sortBy (compare `on` _tdeOffset)
-                    . V.toList
-                    $ _otEntries tables
-    gotoOffset entry = do
-        readed <- bytesRead
-        let toDrop = fromIntegral (_tdeOffset entry) - readed
-        if toDrop < 0 then fail "Weirdo weird"
-        else skip $ fromIntegral toDrop
+    getFetch tables name getter =
+      case [str | (n, str) <- tables, n == name] of
+        [] -> fail $ "Table not found " ++ name
+        (s:_) ->
+            case getOrFail getter s of
+               Left err -> fail err
+               Right v -> return v
 
-    getLoca font@(Font { _fontMaxp = Just maxp, _fontHeader = Just hdr })
-      | _fHdrIndexToLocFormat hdr == 0 = do
-          v <- VU.replicateM glyphCount
-                ((* 2) . fromIntegral <$> getWord16be)
-          return $ font { _fontLoca = Just v }
-      | otherwise = do
-          v <- VU.replicateM glyphCount getWord32be
-          return $ font { _fontLoca = Just v }
-      where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
-    getLoca font = return font
-
-    getGlyph font@(Font { _fontLoca = Just locations }) str =
-      return $ font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval }
-          where decoder (xStart, xEnd)
-                    | xEnd <= xStart = emptyGlyph
-                    | otherwise =
-                        decodeWithDefault emptyGlyph $ chop xStart xEnd
-                chop start _ = LB.drop (fromIntegral start) str
-                locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
-                locationInterval = VU.zip locations $ VU.tail locationsAll
-
-    getGlyph font _ = return font
-
-    fetch font entry | _tdeTag entry == "loca" =
-      gotoOffset entry >> getLoca font
-
-    fetch font entry | _tdeTag entry == "glyf" =
-      gotoOffset entry >>
-          getLazyByteString (fromIntegral $ _tdeLength entry)
-                >>= getGlyph font
-
-    fetch font entry | _tdeTag entry == "head" = do
-      table <- gotoOffset entry >> get
+    fetch tables font "head" = do
+      table <- getFetch tables "head" get
       return $ font { _fontHeader = Just table }
 
-    fetch font entry | _tdeTag entry == "maxp" = do
-      table <- gotoOffset entry >> get
+    fetch tables font "maxp" = do
+      table <- getFetch tables "maxp" get
       return $ font { _fontMaxp = Just table }
 
-    fetch font entry | _tdeTag entry == "cmap" = do
-      table <- gotoOffset entry >> get
+    fetch tables font "cmap" = do
+      table <- getFetch tables "cmap" get
       return $ font { _fontMap = Just table }
 
-    fetch font entry | _tdeTag entry == "name" = do
-      table <- gotoOffset entry >> get
+    fetch tables font "name" = do
+      table <- getFetch tables "name" get
       return $ font { _fontNames = Just table }
 
-    fetch font entry | _tdeTag entry == "hhea" = do
-      table <- gotoOffset entry >> get
+    fetch tables font "hhea" = do
+      table <- getFetch tables "hhea" get
       return $ font { _fontHorizontalHeader = Just table }
-    fetch font@Font { _fontMaxp = Just maxp,
-                      _fontHorizontalHeader = Just hdr } entry
-        | _tdeTag entry == "hmtx" = do
-      gotoOffset entry
-      let metricCount = _hheaLongHorMetricCount hdr
-      table <- getHorizontalMetrics (fromIntegral metricCount) glyphCount
-      return font { _fontHorizontalMetrics = Just table }
-     where glyphCount = fromIntegral $ _maxpnumGlyphs maxp
 
-    fetch font entry = do
-      let tableLength = fromIntegral $ _tdeLength entry
-      rawData <- gotoOffset entry >> getByteString tableLength
-      return $ font { _fontTables =
-                        (_tdeTag entry, rawData) : _fontTables font}
+    fetch tables font "glyf" =
+      case [getGlyph font s | ("glyf", s) <- tables] of
+        [] -> return font
+        (g:_) -> g
+
+    fetch tables font "loca" =
+      getFetch tables "loca" (getLoca font)
+
+    fetch tables font "hmtx" = do
+      getFetch tables "hmtx" (getHmtx font)
+
+    fetch _ font _ = return font
 
 getFont :: Get Font
 getFont = get >>= fetchTables

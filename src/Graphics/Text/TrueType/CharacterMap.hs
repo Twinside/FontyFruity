@@ -99,8 +99,11 @@ instance Binary CharacterMaps where
       when (versionNumber /= 0)
            (fail "Characte map - invalid version number")
       tableCount <- fromIntegral <$> getWord16be
-      tableDesc <- replicateM tableCount $
-          (,,) <$> get <*> getWord16be <*> getWord32be
+      let descFetcher = (,,) <$> get <*> getWord16be <*> getWord32be
+          third (_, _, t) = t
+      tableDesc <-
+          sortBy (comparing third) <$> replicateM tableCount descFetcher
+          
 
       let fetcher (allMaps, lst) (platformId, platformSpecific, offset)
               | M.member offset allMaps = case M.lookup offset allMaps of
