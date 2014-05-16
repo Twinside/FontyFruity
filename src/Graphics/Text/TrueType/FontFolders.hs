@@ -1,8 +1,11 @@
 
-module Graphics.Text.TrueType.FontFolders( loadUnixFontFolderList ) where
+module Graphics.Text.TrueType.FontFolders( loadUnixFontFolderList
+                                         , loadWindowsFontFolderList
+                                         ) where
 
 import Control.Applicative( (<$>) )
 import System.FilePath( (</>) )
+import System.Environment( lookupEnv )
 import Text.XML.HXT.Core( runX
                         , readDocument
                         , withValidate
@@ -31,4 +34,9 @@ loadUnixFontFolderList :: IO [FilePath]
 loadUnixFontFolderList =
    catchAny (fmap (</> "truetype") <$> loadParseFontsConf)
             (const $ return [])
+
+loadWindowsFontFolderList :: IO [FilePath]
+loadWindowsFontFolderList = toFontFolder <$> lookupEnv "Windir"
+  where toFontFolder (Just a) = [a </> "Fonts"]
+        toFontFolder Nothing = []
 
