@@ -52,6 +52,7 @@ import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
 import Graphics.Text.TrueType.HorizontalInfo
 import Graphics.Text.TrueType.Name
+import Graphics.Text.TrueType.FontFolders
 
 {-import Debug.Trace-}
 
