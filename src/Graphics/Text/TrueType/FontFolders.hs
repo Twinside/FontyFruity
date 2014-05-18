@@ -29,7 +29,6 @@ import Text.XML.HXT.Core( runX
 
 import qualified Control.Exception as E
 import qualified Data.Text as T
-import Debug.Trace
 
 import Graphics.Text.TrueType.FontType
 import Graphics.Text.TrueType.Header
@@ -70,9 +69,7 @@ findFont loader fontName fontStyle = do
     isMatching n (Font { _fontHeader = Just hdr
                        , _fontNames = Just names})
       | _fHdrMacStyle hdr == fontStyle &&
-          fname == fontNameText = Just n
-          where
-            fname = (\a -> trace (show a) a)$ fontFamilyName names
+          fontFamilyName names == fontNameText = Just n
     isMatching _ _ = Nothing
 
     searchIn [] = return Nothing
@@ -89,6 +86,6 @@ findFont loader fontName fontStyle = do
         subRez <- searchIn [(s, n </> s) | s <- sub]
         findOrRest subRez
       else do
-        font <- loader . trace ("loading : " ++ show n) $ n
+        font <- loader n
         findOrRest $ font >>= isMatching n
 
