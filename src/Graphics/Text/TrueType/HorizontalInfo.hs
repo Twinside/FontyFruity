@@ -6,6 +6,7 @@ module Graphics.Text.TrueType.HorizontalInfo
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
+import Control.DeepSeq( NFData( .. ) )
 import Control.Monad( when, replicateM_ )
 import Data.Word( Word16 )
 import Data.Int( Int16 )
@@ -44,6 +45,9 @@ data HorizontalHeader = HorizontalHeader
     , _hheaLongHorMetricCount :: {-# UNPACK #-} !Word16
     }
     deriving (Eq, Show)
+
+instance NFData HorizontalHeader where
+    rnf (HorizontalHeader {}) = ()
 
 instance Binary HorizontalHeader where
   put hdr = do

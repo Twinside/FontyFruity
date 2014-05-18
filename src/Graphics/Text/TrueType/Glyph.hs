@@ -11,6 +11,7 @@ module Graphics.Text.TrueType.Glyph
     , emptyGlyph
     ) where
 
+import Control.DeepSeq
 import Control.Applicative( (<$>), (<*>) )
 import Data.Bits( setBit, testBit, shiftL )
 import Data.Int( Int16 )
@@ -47,6 +48,9 @@ data GlyphHeader = GlyphHeader
     }
     deriving (Eq, Show)
 
+instance NFData GlyphHeader where
+  rnf (GlyphHeader _ _ _ _ _) = ()
+
 emptyGlyphHeader :: GlyphHeader
 emptyGlyphHeader = GlyphHeader 0 0 0 0 0
 
@@ -64,6 +68,10 @@ data GlyphContour = GlyphContour
     , _glyphPoints       :: ![VU.Vector (Int16, Int16)]
     }
     deriving (Eq, Show)
+
+instance NFData GlyphContour where
+    rnf (GlyphContour instr fl points) =
+        instr `seq` fl `seq` points `seq` ()
 
 data CompositeScaling = CompositeScaling
     { _a :: {-# UNPACK #-} !Int16
@@ -94,6 +102,10 @@ data Glyph = Glyph
     , _glyphContent :: !GlyphContent
     }
     deriving (Eq, Show)
+
+instance NFData Glyph where
+  rnf (Glyph hdr cont) =
+      rnf hdr `seq` cont `seq` ()
 
 emptyGlyph :: Glyph
 emptyGlyph = Glyph emptyGlyphHeader GlyphEmpty

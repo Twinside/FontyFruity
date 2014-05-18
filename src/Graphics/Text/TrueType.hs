@@ -9,9 +9,11 @@ module Graphics.Text.TrueType
     , loadFontFile
     , getStringCurveAtPoint
     , stringBoundingBox
+    , findFontOfFamily
 
       -- * Types
     , Font( .. )
+    , FontStyle( .. )
     , Dpi
     , PointSize
     ) where
@@ -20,7 +22,7 @@ import Control.Applicative( (<$>) )
 import Control.Monad( foldM, forM )
 import Data.Function( on )
 import Data.List( sortBy, mapAccumL, foldl' )
-import Data.Word( Word16, Word32 )
+import Data.Word( Word16 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead
@@ -32,12 +34,15 @@ import Data.Binary.Get( Get
 
 #if MIN_VERSION_binary(0,6,4)
 import qualified Data.Binary.Get as G
+import Control.DeepSeq( NFData )
 #else
 import qualified Data.Binary.Get as G
 import qualified Control.Exception as E
 -- I feel so dirty. :(
 import System.IO.Unsafe( unsafePerformIO )
+import Control.DeepSeq( NFData, ($!!) )
 #endif
+
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as LB
@@ -51,53 +56,26 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
 import Graphics.Text.TrueType.HorizontalInfo
-import Graphics.Text.TrueType.Name
+import Graphics.Text.TrueType.Name()
+import Graphics.Text.TrueType.FontType
 import Graphics.Text.TrueType.FontFolders
 
 {-import Debug.Trace-}
-
--- | Type representing a font.
-data Font = Font
-    { _fontOffsetTable       :: !OffsetTable
-    , _fontTables            :: ![(B.ByteString, B.ByteString)]
-    , _fontNames             :: Maybe NameTable
-    , _fontHeader            :: Maybe FontHeader
-    , _fontMaxp              :: Maybe MaxpTable
-    , _fontMap               :: Maybe CharacterMaps
-    , _fontGlyph             :: Maybe (V.Vector Glyph)
-    , _fontLoca              :: Maybe (VU.Vector Word32)
-    , _fontHorizontalHeader  :: Maybe HorizontalHeader
-    , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
-    }
-    deriving (Show)
-
-emptyFont :: OffsetTable -> Font
-emptyFont table = Font
-    { _fontTables            = []
-    , _fontOffsetTable       = table
-    , _fontNames             = Nothing
-    , _fontHeader            = Nothing
-    , _fontGlyph             = Nothing
-    , _fontMaxp              = Nothing
-    , _fontLoca              = Nothing
-    , _fontMap               = Nothing
-    , _fontHorizontalHeader  = Nothing
-    , _fontHorizontalMetrics = Nothing
-    }
 
 -- | Load a font file, the file path must be pointing
 -- to the true type file (.ttf)
 loadFontFile :: FilePath -> IO (Either String Font)
 loadFontFile filepath = decodeFont <$> LB.readFile filepath
 
-getOrFail :: Get a -> LB.ByteString -> Either String a
+getOrFail :: NFData a => Get a -> LB.ByteString -> Either String a
 getOrFail getter str =
 #if MIN_VERSION_binary(0,6,4)
   case G.runGetOrFail getter str of
     Left err -> Left $ show err
     Right (_, _, value) -> Right value
 #else
-  unsafePerformIO $ E.evaluate (return $ G.runGet getter str)
+  unsafePerformIO $ E.evaluate (let v = G.runGet getter str in
+                                return $!! v)
     `E.catch` catcher
       where catcher :: E.SomeException -> IO (Either String a)
             catcher e = return . Left $ show e
@@ -107,7 +85,8 @@ getOrFail getter str =
 decodeFont :: LB.ByteString -> Either String Font
 decodeFont = getOrFail getFont
 
-decodeWithDefault :: forall a . Binary a => a -> LB.ByteString -> a
+decodeWithDefault :: forall a . (NFData a, Binary a)
+                  => a -> LB.ByteString -> a
 decodeWithDefault defaultValue str =
     case getOrFail get str of
       Left _ -> defaultValue
@@ -154,8 +133,8 @@ getHmtx font@Font { _fontMaxp = Just maxp,
   return font { _fontHorizontalMetrics = Just table }
 getHmtx font = return font
 
-fetchTables :: OffsetTable -> Get Font
-fetchTables offsetTable = do
+fetchTables :: [String] -> OffsetTable -> Get Font
+fetchTables tableList offsetTable = do
     let sortedTables =
             sortBy (compare `on` _tdeOffset) . V.toList $ _otEntries offsetTable
     tableData <-
@@ -163,8 +142,8 @@ fetchTables offsetTable = do
           gotoOffset entry
           (B.unpack $ _tdeTag entry,) <$> getLazyByteString (fromIntegral $ _tdeLength entry)
 
-    foldM (fetch tableData) (emptyFont offsetTable)
-          ["head" :: String, "maxp", "cmap", "name", "hhea",  "loca", "glyf", "hmtx"]
+    foldM (fetch tableData) (emptyFont offsetTable) tableList
+          
   where
     getFetch tables name getter =
       case [str | (n, str) <- tables, n == name] of
@@ -208,7 +187,23 @@ fetchTables offsetTable = do
     fetch _ font _ = return font
 
 getFont :: Get Font
-getFont = get >>= fetchTables
+getFont = get >>= fetchTables allTables
+  where
+    allTables = ["head", "maxp", "cmap", "name", "hhea",  "loca", "glyf", "hmtx"]
+
+getFontNameAndStyle :: Get Font
+getFontNameAndStyle =
+    (filterTable isNecessaryForName <$> get) >>= fetchTables ["head", "name"]
+  where
+    isNecessaryForName v = v == "name" || v == "head" 
+
+findFontOfFamily :: String -> FontStyle -> IO (Maybe FilePath)
+findFontOfFamily = findFont loader
+  where
+    loader n =
+        toMayb . getOrFail getFontNameAndStyle <$> LB.readFile n
+    toMayb (Left _) = Nothing
+    toMayb (Right v) = Just v
 
 -- | Express device resolution in dot per inch.
 type Dpi = Int

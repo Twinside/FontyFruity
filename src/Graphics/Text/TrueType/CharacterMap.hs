@@ -6,9 +6,9 @@ module Graphics.Text.TrueType.CharacterMap
     , findCharGlyph
     ) where
 
-import Control.Monad( replicateM )
 import Control.Applicative( (<$>), (<*>) )
-import Control.Monad( when, foldM )
+import Control.DeepSeq( NFData( .. ) )
+import Control.Monad( replicateM,  when, foldM  )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , skip
@@ -85,11 +85,17 @@ data CharacterMap = CharacterMap
     }
     deriving (Eq, Show)
 
+instance NFData CharacterMap where
+  rnf (CharacterMap {}) = ()
+
 instance Ord CharacterMap where
     compare = comparing _charMap
 
 newtype CharacterMaps = CharacterMaps [CharacterMap]
     deriving (Eq, Show)
+
+instance NFData CharacterMaps where
+  rnf (CharacterMaps maps) = rnf maps `seq` ()
 
 instance Binary CharacterMaps where
   put _ = fail "Unimplemented"

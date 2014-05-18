@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                FontyFruity
-version:             0.2.1
+version:             0.3
 synopsis:            A true type file format loader
 description:         
     An haskell Truetype file parser.
@@ -28,7 +28,7 @@ Source-Repository head
 Source-Repository this
     Type:      git
     Location:  https://github.com/Twinside/FontyFruity.git
-    Tag:       v0.2.1
+    Tag:       v0.3
 
 
 library
@@ -44,6 +44,7 @@ library
                , Graphics.Text.TrueType.HorizontalInfo
                , Graphics.Text.TrueType.Name
                , Graphics.Text.TrueType.FontFolders
+               , Graphics.Text.TrueType.FontType
 
   ghc-options: -Wall -O2
   ghc-prof-options: -Wall -prof -auto-all
@@ -54,9 +55,11 @@ library
                , bytestring >= 0.10
                , containers >= 0.4.2 && < 0.6
                , vector     >= 0.9
+               , directory
                , hxt
                , text
                , filepath
+               , deepseq >= 1.2
 
 Executable fontytest
     default-language:    Haskell2010
