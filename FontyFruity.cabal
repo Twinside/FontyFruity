@@ -73,5 +73,4 @@ Executable fontytest
                  , vector
                  , filepath
                  , binary
-                 , groom
 
