@@ -1,10 +1,13 @@
 module Graphics.Text.TrueType.Name
     ( NameTable
     , NameRecords
+    , fontFamilyName
     ) where
 
+import Control.DeepSeq( NFData( .. ) )
 import Control.Applicative( (<$>), (<*>), pure )
 import Control.Monad( when, replicateM )
+import Data.Foldable( asum )
 import Data.Function( on )
 import Data.List( maximumBy )
 import Data.Monoid( mempty )
@@ -14,10 +17,17 @@ import Data.Binary.Put( putWord16be )
 import Data.Word( Word16 )
 import qualified Data.Vector as V
 import qualified Data.ByteString as B
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+
+import Graphics.Text.TrueType.LanguageIds
 
 data NameTable = NameTable
     { _ntRecords      :: !(V.Vector NameRecords) }
     deriving Show
+
+instance NFData NameTable where
+    rnf (NameTable {}) = ()
 
 instance Binary NameTable where
   put _ = fail "Binary.put NameTable - unimplemented"
@@ -49,6 +59,50 @@ data NameRecords = NameRecords
     , _nrString             :: !B.ByteString
     }
     deriving Show
+
+fontFamilyName :: NameTable -> T.Text
+fontFamilyName (NameTable { _ntRecords = records }) =
+    maybe T.empty id . asum $ transform <$>
+            [ (selectorUnicode, utf16Decoder)
+            , (selectorMac, utf8Decoder)
+            , (selectorWin0, utf16Decoder)
+            , (selectorWin1, utf16Decoder)
+            ]
+  where
+    utf16Decoder = TE.decodeUtf16BE . _nrString
+    utf8Decoder = TE.decodeUtf8 . _nrString
+    transform (selector, decoder) =
+        decoder <$> V.find selector records
+
+    fontFamilyId = 1
+
+    windowsPlatform =
+        platformToWord PlatformWindows
+    selectorWin0 r =
+                  _nrNameId r == fontFamilyId &&
+      _nrPlatoformId r        == windowsPlatform &&
+      _nrPlatformSpecificId r == 0
+
+    selectorWin1 r =
+                  _nrNameId r == fontFamilyId &&
+      _nrPlatoformId r        == windowsPlatform &&
+      _nrPlatformSpecificId r == 1
+
+    macPlatform =
+        platformToWord PlatformMacintosh
+    selectorMac r =
+                  _nrNameId r == fontFamilyId &&
+      _nrPlatoformId r        == macPlatform &&
+      _nrPlatformSpecificId r == 0
+
+    unicodePlatform =
+        platformToWord PlatformUnicode
+    semanticUnicode2 =
+        unicodePlatformSpecificToId UnicodeBMPOnly2_0
+    selectorUnicode r =
+                  _nrNameId r == fontFamilyId &&
+      _nrPlatoformId r        == unicodePlatform &&
+      _nrPlatformSpecificId r == semanticUnicode2
 
 instance Binary NameRecords where
   get = NameRecords <$> g16 <*> g16 <*> g16 

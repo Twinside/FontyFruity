@@ -1,10 +1,12 @@
 module Graphics.Text.TrueType.Header
     ( FontHeader( .. )
+    , FontStyle( .. )
     , HeaderFlags( .. )
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
-import Data.Bits( setBit, testBit )
+import Control.DeepSeq( NFData( .. ) )
+import Data.Bits( (.|.), setBit, testBit )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be
                       , getWord32be
@@ -18,6 +20,30 @@ import Data.List( foldl' )
 import Data.Word( Word16, Word32, Word64 )
 
 import Graphics.Text.TrueType.Types
+
+-- | Describe the basic stylistic properties
+-- of a font.
+data FontStyle = FontStyle
+  { _fontStyleBold   :: !Bool -- ^ If the font is bold.
+  , _fontStyleItalic :: !Bool -- ^ If the font is italic.
+  }
+  deriving (Eq, Ord, Show)
+
+instance Binary FontStyle where
+  put style = putWord16be $ italicByte .|. boldByte
+    where
+      boldByte
+        | _fontStyleBold style = 1
+        | otherwise = 0
+
+      italicByte
+        | _fontStyleItalic style = 2
+        | otherwise = 0
+
+  get = do
+    styleWord <- getWord16be 
+    let bitAt = testBit styleWord
+    return $ FontStyle (bitAt 0) (bitAt 1)
 
 data FontHeader = FontHeader
     { -- | Table version number	0x00010000 for version 1.0.
@@ -48,7 +74,7 @@ data FontHeader = FontHeader
       -- | For all glyph bounding boxes.
     , _fHdrYMax             :: !FWord
       -- | Bit 0 bold (if set to 1); Bit 1 italic (if set to 1)
-    , _fHdrMacStyle         :: !Word16
+    , _fHdrMacStyle         :: !FontStyle
       -- | Smallest readable size in pixels.
     , _fHdrLowestRecPPEM    :: !Word16
 
@@ -65,12 +91,15 @@ data FontHeader = FontHeader
     }
     deriving (Eq, Show)
 
+instance NFData FontHeader where
+  rnf (FontHeader {}) = ()
+
 instance Binary FontHeader where
   put _ = fail "Unimplemented"
   get =
     FontHeader <$> get <*> get <*> g32 <*> g32 <*> get
                <*> g16 <*> g64 <*> g64 <*> get <*> get
-               <*> get <*> get <*> g16 <*> g16 <*> gi16
+               <*> get <*> get <*> get <*> g16 <*> gi16
                <*> gi16 <*> gi16
       where g16 = getWord16be
             g32 = getWord32be

@@ -1,5 +1,10 @@
 -*-change-log-*-
 
+v0.3 June 2014
+ * Adding a font finding function
+ * Adding a font cache type to speed-up frequent font
+   finding.
+
 v0.2.1 April 2014
  * Fixing some character map loading problem (again)
  * Fixing font loading with out of order tables

@@ -4,16 +4,15 @@ import Data.Monoid( mempty )
 import Data.Binary( decodeFile )
 import qualified Data.Vector as V
 import System.Environment( getArgs )
-import Text.Groom( groom )
 
 import Graphics.Text.TrueType
 
 dumpFont :: Font -> IO ()
 dumpFont font = do
-  putStrLn . groom $ font
+  putStrLn . show $ font
     { _fontGlyph = Nothing
     , _fontTables = [(t, mempty) | (t, _) <- _fontTables font] }
-  V.mapM_ (putStrLn . groom) . fromJust $ _fontGlyph font
+  V.mapM_ (putStrLn . show) . fromJust $ _fontGlyph font
 
 dumpFontName :: FilePath -> IO ()
 dumpFontName fontname = do
@@ -25,6 +24,11 @@ dumpFontName fontname = do
 main :: IO ()
 main = do
   args <- getArgs
+  o <- findFontOfFamily "Consolas" $ FontStyle False False
+  case o of
+    Nothing -> putStrLn "not found"
+    Just v -> putStrLn v
+
   case args of
     [] -> putStrLn "missing font filename"
     (fontname:_) -> dumpFontName fontname

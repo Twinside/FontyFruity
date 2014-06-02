@@ -4,6 +4,8 @@ module Graphics.Text.TrueType.LanguageIds
     , UnicodePlatformSpecific( .. )
     , MacPlatformId( .. )
     , MacLanguage( .. )
+    , platformToWord
+    , unicodePlatformSpecificToId
     ) where
 
 import Control.Applicative( (<$>) )
@@ -23,15 +25,7 @@ data PlatformId
     deriving (Eq, Show)
 
 instance Binary PlatformId where
-    put = p where
-      p16 = putWord16be
-      p PlatformUnicode = p16 0
-      p PlatformMacintosh = p16 1
-      p PlatformISO = p16 2
-      p PlatformWindows = p16 3
-      p PlatformCustom = p16 4
-      p (PlatformId v) = p16 v
-
+    put = putWord16be . platformToWord
     get = do
       val <- getWord16be
       return $ case val of
@@ -41,6 +35,15 @@ instance Binary PlatformId where
         3 -> PlatformWindows
         4 -> PlatformCustom
         n -> PlatformId n
+
+platformToWord :: PlatformId -> Word16
+platformToWord = p where
+  p PlatformUnicode = 0
+  p PlatformMacintosh = 1
+  p PlatformISO = 2
+  p PlatformWindows = 3
+  p PlatformCustom = 4
+  p (PlatformId v) = v
 
 data UnicodePlatformSpecific
     = UnicodePlatform1_0

@@ -2,6 +2,7 @@ module Graphics.Text.TrueType.OffsetTable
     ( OffsetTableHeader( .. )
     , OffsetTable( .. )
     , TableDirectoryEntry( .. )
+    , filterTable
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
@@ -54,6 +55,11 @@ data TableDirectoryEntry = TableDirectoryEntry
     , _tdeLength   :: !Word32
     }
     deriving (Eq, Show)
+
+filterTable :: (BC.ByteString -> Bool) -> OffsetTable
+            -> OffsetTable
+filterTable f table =
+  table { _otEntries = V.filter (f . _tdeTag) $ _otEntries table }
 
 instance Binary TableDirectoryEntry where
   get = TableDirectoryEntry <$> getByteString 4 <*> g32 <*> g32 <*> g32

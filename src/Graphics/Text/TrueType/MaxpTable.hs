@@ -1,6 +1,7 @@
 module Graphics.Text.TrueType.MaxpTable( MaxpTable( .. ) ) where
 
 import Control.Applicative( (<$>), (<*>) )
+import Control.DeepSeq( NFData( .. ) )
 import Data.Word( Word16 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be )
@@ -40,6 +41,9 @@ data MaxpTable = MaxpTable
     , _maxpmaxComponentDepth :: !Word16
     }
     deriving (Eq, Show)
+
+instance NFData MaxpTable where
+    rnf (MaxpTable {}) = ()
 
 instance Binary MaxpTable where
     put _ = fail "Unimplemented"
