@@ -56,7 +56,6 @@ library
                , containers >= 0.4.2 && < 0.6
                , vector     >= 0.9
                , directory
-               , hxt
                , text
                , filepath
                , deepseq >= 1.2

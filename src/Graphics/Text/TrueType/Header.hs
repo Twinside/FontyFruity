@@ -21,11 +21,13 @@ import Data.Word( Word16, Word32, Word64 )
 
 import Graphics.Text.TrueType.Types
 
+-- | Describe the basic stylistic properties
+-- of a font.
 data FontStyle = FontStyle
-  { _fontStyleBold   :: !Bool
-  , _fontStyleItalic :: !Bool
+  { _fontStyleBold   :: !Bool -- ^ If the font is bold.
+  , _fontStyleItalic :: !Bool -- ^ If the font is italic.
   }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance Binary FontStyle where
   put style = putWord16be $ italicByte .|. boldByte

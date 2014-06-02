@@ -11,6 +11,12 @@ module Graphics.Text.TrueType
     , stringBoundingBox
     , findFontOfFamily
 
+      -- * Font cache
+    , FontCache
+    , FontDescriptor( .. )
+    , findFontInCache
+    , buildCache
+
       -- * Types
     , Font( .. )
     , FontStyle( .. )
@@ -43,7 +49,7 @@ import System.IO.Unsafe( unsafePerformIO )
 import Control.DeepSeq( NFData, ($!!) )
 #endif
 
-
+import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Vector as V
@@ -197,6 +203,24 @@ getFontNameAndStyle =
   where
     isNecessaryForName v = v == "name" || v == "head" 
 
+-- | This function will search in the system for truetype
+-- files and index them in a cache for further fast search.
+buildCache :: IO FontCache
+buildCache = buildFontCache loader
+  where
+    loader n =
+        toMayb . getOrFail getFontNameAndStyle <$> LB.readFile n
+    toMayb (Left _) = Nothing
+    toMayb (Right v) = Just v
+
+-- | Try to find a font with the given properties in the
+-- font cache.
+findFontInCache :: FontCache -> FontDescriptor -> Maybe FilePath
+findFontInCache (FontCache cache) descr = M.lookup descr cache
+
+-- | This function will scan the system's font folder to
+-- find a font with the desired properties. Favor using
+-- a FontCache to speed up the lookup process.
 findFontOfFamily :: String -> FontStyle -> IO (Maybe FilePath)
 findFontOfFamily = findFont loader
   where
