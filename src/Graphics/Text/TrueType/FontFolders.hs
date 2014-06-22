@@ -14,6 +14,7 @@ import Control.Applicative( (<$>), (<*>) )
 {-import Control.DeepSeq( ($!!) )-}
 {-import Data.Monoid( (<>) )-}
 import System.Directory( getDirectoryContents
+                       , getHomeDirectory
                        , doesDirectoryExist
                        , doesFileExist
                        )
@@ -69,12 +70,13 @@ loadWindowsFontFolderList = toFontFolder <$> lookupEnv "Windir"
         toFontFolder Nothing = []
 
 loadOsXFontFolderList :: IO [FilePath]
-loadOsXFontFolderList = return
-    ["~/Library/Fonts"
-    ,"/Library/Fonts"
-    ,"/System/Library/Fonts"
-    ,"/System Folder/Fonts"
-    ]
+loadOsXFontFolderList = do
+    home <- getHomeDirectory
+    return [home </> "Library" </> "Fonts"
+           ,"/" </> "Library" </> "Fonts"
+           ,"/" </> "System" </> "Library" </> "Fonts"
+           ,"/" </> "System Folder" </> "Fonts"
+           ]
 
 
 fontFolders :: IO [FilePath]
