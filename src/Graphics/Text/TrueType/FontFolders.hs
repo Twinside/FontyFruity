@@ -7,6 +7,7 @@ module Graphics.Text.TrueType.FontFolders
     , FontCache( .. )
     , FontDescriptor( .. )
     , buildFontCache
+    , enumerateFonts
     ) where
 
 import Control.Applicative( (<$>), (<*>) )
@@ -14,6 +15,7 @@ import Control.Applicative( (<$>), (<*>) )
 {-import Data.Monoid( (<>) )-}
 import System.Directory( getDirectoryContents
                        , doesDirectoryExist
+                       , doesFileExist
                        )
 import qualified Data.Map as M
 import System.Environment( lookupEnv )
@@ -48,7 +50,7 @@ loadParseFontsConf = runX (
         readDocument [withValidate no, withSubstDTDEntities no]
                      "/etc/fonts/fonts.conf"
             >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
- 
+
 -- -}
 
 loadUnixFontFolderList :: IO [FilePath]
@@ -73,7 +75,7 @@ loadOsXFontFolderList = return
     ,"/System/Library/Fonts"
     ,"/System Folder/Fonts"
     ]
-    
+
 
 fontFolders :: IO [FilePath]
 fontFolders = do
@@ -95,13 +97,17 @@ data FontDescriptor = FontDescriptor
 -- | A font cache is a cache listing all the found
 -- fonts on the system, allowing faster font lookup
 -- once created
-newtype FontCache = 
+newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+
+-- | Returns a list of descriptors of fonts stored in the given cache.
+enumerateFonts :: FontCache -> [FontDescriptor]
+enumerateFonts (FontCache fs) = M.keys fs
 
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache
 buildFontCache loader = do
-  folders <- fontFolders 
+  folders <- fontFolders
   found <- build [("", v) | v <- folders]
   return . FontCache
          $ M.fromList [(d, path) | (Just d, path) <- found]
@@ -119,19 +125,22 @@ buildFontCache loader = do
       isDirectory <- doesDirectoryExist n
 
       if isDirectory then do
-        sub <- getDirectoryContents n 
+        sub <- getDirectoryContents n
         (++) <$> build [(s, n </> s) | s <- sub]
              <*> build rest
       else do
-        f <- loader n
-        case f of
-          Nothing -> build rest
-          Just fo -> ((descriptorOf fo, n) :) <$> build rest
+        isFile <- doesFileExist n
+        if isFile then do
+            f <- loader n
+            case f of
+              Nothing -> build rest
+              Just fo -> ((descriptorOf fo, n) :) <$> build rest
+        else build rest
 
 findFont :: (FilePath -> IO (Maybe Font)) -> String -> FontStyle
          -> IO (Maybe FilePath)
 findFont loader fontName fontStyle = do
-    folders <- fontFolders 
+    folders <- fontFolders
     searchIn [("", v) | v <- folders]
   where
     fontNameText = T.pack fontName
@@ -151,7 +160,7 @@ findFont loader fontName fontStyle = do
           findOrRest l = return l
 
       if isDirectory then do
-        sub <- getDirectoryContents n 
+        sub <- getDirectoryContents n
         subRez <- searchIn [(s, n </> s) | s <- sub]
         findOrRest subRez
       else do

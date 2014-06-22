@@ -16,6 +16,7 @@ module Graphics.Text.TrueType
     , FontDescriptor( .. )
     , findFontInCache
     , buildCache
+    , enumerateFonts
 
       -- * Types
     , Font( .. )
@@ -120,7 +121,7 @@ getLoca font = return font
 getGlyph :: Font -> LB.ByteString -> Get Font
 getGlyph font@(Font { _fontLoca = Just locations }) str =
 
-  return font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval } 
+  return font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval }
       where decoder (xStart, xEnd)
                 | xEnd <= xStart = emptyGlyph
                 | otherwise =
@@ -149,7 +150,7 @@ fetchTables tableList offsetTable = do
           (B.unpack $ _tdeTag entry,) <$> getLazyByteString (fromIntegral $ _tdeLength entry)
 
     foldM (fetch tableData) (emptyFont offsetTable) tableList
-          
+
   where
     getFetch tables name getter =
       case [str | (n, str) <- tables, n == name] of
@@ -201,7 +202,7 @@ getFontNameAndStyle :: Get Font
 getFontNameAndStyle =
     (filterTable isNecessaryForName <$> get) >>= fetchTables ["head", "name"]
   where
-    isNecessaryForName v = v == "name" || v == "head" 
+    isNecessaryForName v = v == "name" || v == "head"
 
 -- | This function will search in the system for truetype
 -- files and index them in a cache for further fast search.
