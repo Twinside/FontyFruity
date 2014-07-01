@@ -1,4 +1,4 @@
-
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Text.TrueType.FontFolders
     ( loadUnixFontFolderList
     , loadWindowsFontFolderList
@@ -10,6 +10,7 @@ module Graphics.Text.TrueType.FontFolders
     , enumerateFonts
     ) where
 
+import Control.Monad( when, replicateM )
 import Control.Applicative( (<$>), (<*>) )
 {-import Control.DeepSeq( ($!!) )-}
 {-import Data.Monoid( (<>) )-}
@@ -18,6 +19,15 @@ import System.Directory( getDirectoryContents
                        , doesDirectoryExist
                        , doesFileExist
                        )
+import qualified Data.ByteString as B
+import Data.Binary( Binary( .. ) )
+import Data.Binary.Get( Get
+                      , getWord32be
+                      , getByteString 
+                      )
+import Data.Binary.Put( Put
+                      , putWord32be
+                      , putByteString )
 import qualified Data.Map as M
 import System.Environment( lookupEnv )
 import System.FilePath( (</>) )
@@ -96,11 +106,36 @@ data FontDescriptor = FontDescriptor
     }
     deriving (Eq, Ord, Show)
 
+instance Binary FontDescriptor where
+  put (FontDescriptor t s) = put (T.unpack t) >> put s
+  get = FontDescriptor <$> (T.pack <$> get) <*> get
+
 -- | A font cache is a cache listing all the found
 -- fonts on the system, allowing faster font lookup
 -- once created
 newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+
+signature :: B.ByteString
+signature = "FontyFruity__FONTCACHE:0.3.1"
+
+putFontCache :: FontCache -> Put
+putFontCache (FontCache cache) = do
+  putByteString signature
+  putWord32be . fromIntegral $ M.size cache
+  mapM_ put $ M.toList cache
+
+getFontCache :: Get FontCache
+getFontCache = do
+  str <- getByteString $ B.length signature
+  when (str /= signature) $
+      fail "Invalid font cache"
+  count <- fromIntegral <$> getWord32be
+  FontCache . M.fromList <$> replicateM count get
+
+instance Binary FontCache where
+  put = putFontCache
+  get = getFontCache
 
 -- | Returns a list of descriptors of fonts stored in the given cache.
 enumerateFonts :: FontCache -> [FontDescriptor]
