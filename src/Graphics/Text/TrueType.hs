@@ -8,6 +8,9 @@ module Graphics.Text.TrueType
       decodeFont
     , loadFontFile
     , getStringCurveAtPoint
+    , unitsPerEm
+    , isPlaceholder
+    , getCharacterCurvesAndMetrics
     , stringBoundingBox
     , findFontOfFamily
 
@@ -245,7 +248,7 @@ glyphOfStrings Font { _fontMap = Just mapping
     fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
 glyphOfStrings _ _ = []
 
-unitsPerEm :: Font -> Word16
+unitsPerEm :: Font -> Int
 unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
 unitsPerEm  _ = 1
@@ -355,3 +358,65 @@ getGlyphIndexCurvesAtPointSizeAndPos
         [ VU.map (\(x, y) -> (toPixelCoordinate baseX x, toPixelCoordinate (0 :: Int) y)) c
                 | c <- extractFlatOutline countour]
 
+-- | True if the character is not present in the font, therefore it
+-- will appear as a placeholder in renderings.
+isPlaceholder :: Font -> Char -> Bool
+isPlaceholder Font { _fontMap = Just fontMap } character =
+    findCharGlyph fontMap 0 character == 0
+
+-- | Extract a list of outlines for the character.  The given curves
+-- are in a coordinate system where the baseline is at y = 0 and y
+-- increases upwards.  Also, the coordinates are not scaled, so the
+-- value of 'unitsPerEm' specifies how they need to be interpreted.
+-- The first two values in the returned triple are the bearing and
+-- advance values for the character.
+getCharacterCurvesAndMetrics :: Font -> Char -> (Float, Float, [VU.Vector (Float, Float)])
+getCharacterCurvesAndMetrics font character =
+    (bearing, advance, getUnscaledGlyphIndexCurves font glyph)
+  where
+    [(glyph, metrics)] = glyphOfStrings font [character]
+    bearing = fromIntegral $ _hmtxLeftSideBearing metrics
+    advance = fromIntegral $ _hmtxAdvanceWidth metrics
+
+getUnscaledGlyphIndexCurves :: Font -> Glyph -> [VU.Vector (Float, Float)]
+getUnscaledGlyphIndexCurves Font { _fontHeader = Nothing } _ = []
+getUnscaledGlyphIndexCurves Font { _fontGlyph = Nothing } _ = []
+getUnscaledGlyphIndexCurves
+    Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs }
+        topGlyph = glyphExtract topGlyph
+  where
+    go index | index >= V.length allGlyphs = []
+             | otherwise = glyphExtract $ allGlyphs V.! index
+
+    composeGlyph composition = VU.map updateCoords <$> subCurves
+      where
+        subCurves = go . fromIntegral $ _glyphCompositeIndex composition
+        toFloat v = fromIntegral v / (0x4000 :: Float)
+        CompositeScaling ai bi ci di ei fi = _glyphCompositionScale composition
+
+        scaler v1 v2
+            | fromIntegral (abs (abs ai - abs ci)) <= (33 / 65536 :: Float) = 2 * vf
+            | otherwise = vf
+          where
+           vf = toFloat $ max (abs v1) (abs v2)
+
+        m = scaler ai bi
+        n = scaler ci di
+
+        am = toFloat ai / m
+        cm = toFloat ci / m
+        bn = toFloat ci / n
+        dn = toFloat di / n
+        e = toFloat ei
+        f = toFloat fi
+
+        updateCoords (x,y) =
+            (m * (am * x + cm * y + e), n * (bn * x + dn * y + f))
+
+    toFCoord (x,y) = (fromIntegral x, fromIntegral y)
+
+    glyphExtract Glyph { _glyphContent = GlyphEmpty } = []
+    glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
+        concatMap composeGlyph $ V.toList compositions
+    glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
+        map (VU.map toFCoord) (extractFlatOutline countour)
