@@ -1,5 +1,10 @@
 -*-change-log-*-
 
+v0.3.1 2014
+ * Adding function to get back unplaced glyph.
+ * Adding Binary instance for Font cache.
+ * Fixing font cache.
+
 v0.3 June 2014
  * Adding a font finding function
  * Adding a font cache type to speed-up frequent font

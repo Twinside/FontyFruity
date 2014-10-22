@@ -11,12 +11,14 @@ module Graphics.Text.TrueType
     , unitsPerEm
     , isPlaceholder
     , getCharacterCurvesAndMetrics
+    , getGlyphForStrings
     , stringBoundingBox
     , findFontOfFamily
 
       -- * Font cache
     , FontCache
     , FontDescriptor( .. )
+    , emptyFontCache
     , findFontInCache
     , buildCache
     , enumerateFonts
@@ -248,7 +250,7 @@ glyphOfStrings Font { _fontMap = Just mapping
     fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
 glyphOfStrings _ _ = []
 
-unitsPerEm :: Font -> Int
+unitsPerEm :: Font -> Word16
 unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
 unitsPerEm  _ = 1
@@ -303,6 +305,32 @@ getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
           getGlyphIndexCurvesAtPointSizeAndPos font dpi (toFCoord p maximumSize)
             (pointSize, glyph) (xi + bearing, yi)
 
+-- | This function return the list of all contour for all char with the given
+-- font in a string. All glyph are at the same position, they are not placed
+-- like with `getStringCurveAtPoint`. It is a function helpful to extract
+-- the glyph geometry for further external manipulation.
+getGlyphForStrings :: Dpi -> [(Font, PointSize, String)]
+                   -> [[VU.Vector (Float, Float)]]
+getGlyphForStrings dpi lst =  go <$> glyphes where
+  glyphes = concat $
+    [(font, size, fromIntegral $ unitsPerEm font,)
+                            <$> glyphOfStrings font str | (font, size, str) <- lst]
+
+  toFCoord (_, pointSize, emSize, _) v = floor $ v * emSize / pixelSize :: Int
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  toPixel pointSize emSize v = fromIntegral v * pixelSize / emSize
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  maximumSize :: Float
+  maximumSize = maximum [ toPixel pointSize em . _glfYMax $ _glyphHeader glyph
+                                | (_, pointSize, em, (glyph, _)) <- glyphes ]
+
+  go p@(font, pointSize, _, (glyph, _metric)) =
+    getGlyphIndexCurvesAtPointSizeAndPos
+        font dpi (toFCoord p maximumSize) (pointSize, glyph) (0, 0)
 
 getGlyphIndexCurvesAtPointSizeAndPos :: Font -> Dpi -> Int -> (PointSize, Glyph) -> (Int, Int)
                                      -> [VU.Vector (Float, Float)]
@@ -363,6 +391,7 @@ getGlyphIndexCurvesAtPointSizeAndPos
 isPlaceholder :: Font -> Char -> Bool
 isPlaceholder Font { _fontMap = Just fontMap } character =
     findCharGlyph fontMap 0 character == 0
+isPlaceholder Font { _fontMap = Nothing } _ = True
 
 -- | Extract a list of outlines for the character.  The given curves
 -- are in a coordinate system where the baseline is at y = 0 and y
@@ -381,8 +410,7 @@ getCharacterCurvesAndMetrics font character =
 getUnscaledGlyphIndexCurves :: Font -> Glyph -> [VU.Vector (Float, Float)]
 getUnscaledGlyphIndexCurves Font { _fontHeader = Nothing } _ = []
 getUnscaledGlyphIndexCurves Font { _fontGlyph = Nothing } _ = []
-getUnscaledGlyphIndexCurves
-    Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs }
+getUnscaledGlyphIndexCurves Font { _fontGlyph = Just allGlyphs }
         topGlyph = glyphExtract topGlyph
   where
     go index | index >= V.length allGlyphs = []
@@ -420,3 +448,4 @@ getUnscaledGlyphIndexCurves
         concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
         map (VU.map toFCoord) (extractFlatOutline countour)
+

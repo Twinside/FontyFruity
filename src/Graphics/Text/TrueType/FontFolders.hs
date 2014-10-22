@@ -6,6 +6,7 @@ module Graphics.Text.TrueType.FontFolders
     , findFont
     , FontCache( .. )
     , FontDescriptor( .. )
+    , emptyFontCache
     , buildFontCache
     , enumerateFonts
     ) where
@@ -115,6 +116,9 @@ instance Binary FontDescriptor where
 -- once created
 newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+
+emptyFontCache :: FontCache
+emptyFontCache = FontCache M.empty
 
 signature :: B.ByteString
 signature = "FontyFruity__FONTCACHE:0.3.1"
