@@ -160,7 +160,9 @@ getCompositeOutline =
 
     getInt16be = fromIntegral <$> getWord16be
     getF2Dot14 = fromIntegral <$> getWord16be
-    getInt8 = fromIntegral <$> getWord8
+    getInt8 = fixByteSign . fromIntegral <$> getWord8
+
+    fixByteSign value = if value >= 0x80 then value - 0x100 else value
 
     aRG_1_AND_2_ARE_WORDS  = 0
     aRGS_ARE_XY_VALUES  = 1
