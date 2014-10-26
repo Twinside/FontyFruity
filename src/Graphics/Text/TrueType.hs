@@ -396,14 +396,14 @@ isPlaceholder Font { _fontMap = Just fontMap } character =
 isPlaceholder Font { _fontMap = Nothing } _ = True
 
 -- | Extract a list of outlines for every glyph making up a character.
--- The returned value is the pair '(advance, glyphs)', where 'advance'
+-- The returned value is the pair @(advance, glyphs)@, where @advance@
 -- tells how much the point needs to move after drawing the character,
--- and 'glpyhs' is a vector of triples of the form '(transforms,
--- index, curves)'.  The curves are given in a coordinate system where
+-- and @glyphs@ is a vector of triples of the form @(transforms,
+-- index, curves)@.  The curves are given in a coordinate system where
 -- the baseline is at y = 0 and y increases upwards.  Also, the
 -- coordinates are not scaled, so the value of 'unitsPerEm' specifies
--- how they need to be interpreted ('advance' is also defined in the
--- same units).  Glyphs are uniquely identified by 'index', which is
+-- how they need to be interpreted (@advance@ is also defined in the
+-- same units).  Glyphs are uniquely identified by @index@, which is
 -- always zero for the placeholder.  Glyphs in composite characters
 -- have an associated list of affine transforms (2 by 3 matrices) that
 -- need to be applied before rendering the character; these are
