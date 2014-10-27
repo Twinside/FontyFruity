@@ -22,7 +22,7 @@ data PlatformId
     | PlatformWindows   -- ^ 3
     | PlatformCustom    -- ^ 4
     | PlatformId Word16
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 instance Binary PlatformId where
     put = putWord16be . platformToWord

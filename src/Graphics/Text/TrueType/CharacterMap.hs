@@ -20,7 +20,7 @@ import Data.Binary.Get( Get
 import Data.Binary.Put( putWord16be
                       , putWord32be )
 import Data.Int( Int16 )
-import Data.List( find, sortBy )
+import Data.List( find, sort, sortBy )
 import qualified Data.Map.Strict as M
 import Data.Maybe( fromMaybe )
 import Data.Word( Word8, Word16, Word32 )
@@ -163,8 +163,8 @@ charTableMap f = go
 
 findCharGlyph :: CharacterMaps -> LangId -> Char -> Int
 findCharGlyph (CharacterMaps charMaps) langId character =
-    fromMaybe 0 $ find (/= 0)
-        [charTableMap (flip glyphIdFromTable character) m
+    fromMaybe 0 . find (/= 0) . map snd . sort $
+        [(_charMapPlatformId allMap, charTableMap (flip glyphIdFromTable character) m)
                 | allMap <- charMaps
                 , let m = _charMap allMap
                 , isLangCompatible m]
