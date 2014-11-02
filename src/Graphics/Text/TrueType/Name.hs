@@ -10,6 +10,7 @@ import Control.Monad( when, replicateM )
 import Data.Foldable( asum )
 import Data.Function( on )
 import Data.List( maximumBy )
+import Data.Maybe( fromMaybe )
 import Data.Monoid( mempty )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be, getByteString )
@@ -62,7 +63,7 @@ data NameRecords = NameRecords
 
 fontFamilyName :: NameTable -> T.Text
 fontFamilyName (NameTable { _ntRecords = records }) =
-    maybe T.empty id . asum $ transform <$>
+    fromMaybe T.empty . asum $ transform <$>
             [ (selectorUnicode, utf16Decoder)
             , (selectorMac, utf8Decoder)
             , (selectorWin0, utf16Decoder)

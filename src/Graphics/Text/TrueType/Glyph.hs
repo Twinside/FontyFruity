@@ -49,7 +49,7 @@ data GlyphHeader = GlyphHeader
     deriving (Eq, Show)
 
 instance NFData GlyphHeader where
-  rnf (GlyphHeader _ _ _ _ _) = ()
+  rnf (GlyphHeader {}) = ()
 
 emptyGlyphHeader :: GlyphHeader
 emptyGlyphHeader = GlyphHeader 0 0 0 0 0
@@ -219,7 +219,7 @@ instance Binary GlyphFlag where
             setter v (ix, True) = setBit v ix
     get = do
       tester <- testBit <$> getWord8
-      return $ GlyphFlag
+      return GlyphFlag
         { _flagOnCurve = tester 0
         , _flagXshort  = tester 1
         , _flagYShort  = tester 2
@@ -263,7 +263,7 @@ getCoords flags =
 
 extractFlatOutline :: GlyphContour
                    -> [VU.Vector (Int16, Int16)]
-extractFlatOutline contour = map go $ zip flagGroup coords
+extractFlatOutline contour = zipWith (curry go) flagGroup coords
   where
     allFlags = _glyphFlags contour
     coords = _glyphPoints contour

@@ -136,7 +136,7 @@ getGlyph font@(Font { _fontLoca = Just locations }) str =
                 | otherwise =
                     decodeWithDefault emptyGlyph $ chop xStart xEnd
             chop start _ = LB.drop (fromIntegral start) str
-            locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
+            locationsAll = locations `VU.snoc` fromIntegral (LB.length str)
             locationInterval = VU.zip locations $ VU.tail locationsAll
 getGlyph font _ = return font
 
@@ -197,7 +197,7 @@ fetchTables tableList offsetTable = do
     fetch tables font "loca" =
       getFetch tables "loca" (getLoca font)
 
-    fetch tables font "hmtx" = do
+    fetch tables font "hmtx" =
       getFetch tables "hmtx" (getHmtx font)
 
     fetch _ font _ = return font
@@ -316,7 +316,7 @@ getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
 getGlyphForStrings :: Dpi -> [(Font, PointSize, String)]
                    -> [[VU.Vector (Float, Float)]]
 getGlyphForStrings dpi lst =  go <$> glyphes where
-  glyphes = concat $
+  glyphes = concat
     [(font, size, fromIntegral $ unitsPerEm font,)
                             <$> glyphOfStrings font str | (font, size, str) <- lst]
 
