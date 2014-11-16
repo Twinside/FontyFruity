@@ -354,7 +354,7 @@ getGlyphIndexCurvesAtPointSizeAndPos
     maxiF = toPixelCoordinate (0 :: Int) maximumSize
     baseYF = toPixelCoordinate (0 :: Int) baseY
 
-    glyphReverse = VU.map (\(x,y) -> (x, maxiF - y + baseYF))
+    glyphReverse = VU.map (\(x,y) -> (x, baseYF - y))
 
     toPixelCoordinate shift coord =
         (fromIntegral (shift + fromIntegral coord) * pixelSize) / emSize
