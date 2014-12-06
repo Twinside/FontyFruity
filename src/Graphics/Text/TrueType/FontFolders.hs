@@ -1,4 +1,4 @@
-
+{-# LANGUAGE OverloadedStrings #-}
 module Graphics.Text.TrueType.FontFolders
     ( loadUnixFontFolderList
     , loadWindowsFontFolderList
@@ -6,15 +6,29 @@ module Graphics.Text.TrueType.FontFolders
     , findFont
     , FontCache( .. )
     , FontDescriptor( .. )
+    , emptyFontCache
     , buildFontCache
+    , enumerateFonts
     ) where
 
+import Control.Monad( when, replicateM )
 import Control.Applicative( (<$>), (<*>) )
 {-import Control.DeepSeq( ($!!) )-}
 {-import Data.Monoid( (<>) )-}
 import System.Directory( getDirectoryContents
+                       , getHomeDirectory
                        , doesDirectoryExist
+                       , doesFileExist
                        )
+import qualified Data.ByteString as B
+import Data.Binary( Binary( .. ) )
+import Data.Binary.Get( Get
+                      , getWord32be
+                      , getByteString 
+                      )
+import Data.Binary.Put( Put
+                      , putWord32be
+                      , putByteString )
 import qualified Data.Map as M
 import System.Environment( lookupEnv )
 import System.FilePath( (</>) )
@@ -48,7 +62,7 @@ loadParseFontsConf = runX (
         readDocument [withValidate no, withSubstDTDEntities no]
                      "/etc/fonts/fonts.conf"
             >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
- 
+
 -- -}
 
 loadUnixFontFolderList :: IO [FilePath]
@@ -67,13 +81,14 @@ loadWindowsFontFolderList = toFontFolder <$> lookupEnv "Windir"
         toFontFolder Nothing = []
 
 loadOsXFontFolderList :: IO [FilePath]
-loadOsXFontFolderList = return
-    ["~/Library/Fonts"
-    ,"/Library/Fonts"
-    ,"/System/Library/Fonts"
-    ,"/System Folder/Fonts"
-    ]
-    
+loadOsXFontFolderList = do
+    home <- getHomeDirectory
+    return [home </> "Library" </> "Fonts"
+           ,"/" </> "Library" </> "Fonts"
+           ,"/" </> "System" </> "Library" </> "Fonts"
+           ,"/" </> "System Folder" </> "Fonts"
+           ]
+
 
 fontFolders :: IO [FilePath]
 fontFolders = do
@@ -92,16 +107,57 @@ data FontDescriptor = FontDescriptor
     }
     deriving (Eq, Ord, Show)
 
+instance Binary FontDescriptor where
+  put (FontDescriptor t s) = put (T.unpack t) >> put s
+  get = FontDescriptor <$> (T.pack <$> get) <*> get
+
 -- | A font cache is a cache listing all the found
 -- fonts on the system, allowing faster font lookup
 -- once created
-newtype FontCache = 
+--
+-- FontCache is an instance of binary, to get okish
+-- performance you should save it in a file somewhere
+-- instead of rebuilding it everytime!
+--
+-- The font cache is dependent on the version
+-- of rasterific, you must rebuild it for every
+-- version.
+newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+
+-- | Font cache with no pre-existing fonts in it.
+emptyFontCache :: FontCache
+emptyFontCache = FontCache M.empty
+
+signature :: B.ByteString
+signature = "FontyFruity__FONTCACHE:0.4"
+
+putFontCache :: FontCache -> Put
+putFontCache (FontCache cache) = do
+  putByteString signature
+  putWord32be . fromIntegral $ M.size cache
+  mapM_ put $ M.toList cache
+
+getFontCache :: Get FontCache
+getFontCache = do
+  str <- getByteString $ B.length signature
+  when (str /= signature) $
+      fail "Invalid font cache"
+  count <- fromIntegral <$> getWord32be
+  FontCache . M.fromList <$> replicateM count get
+
+instance Binary FontCache where
+  put = putFontCache
+  get = getFontCache
+
+-- | Returns a list of descriptors of fonts stored in the given cache.
+enumerateFonts :: FontCache -> [FontDescriptor]
+enumerateFonts (FontCache fs) = M.keys fs
 
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache
 buildFontCache loader = do
-  folders <- fontFolders 
+  folders <- fontFolders
   found <- build [("", v) | v <- folders]
   return . FontCache
          $ M.fromList [(d, path) | (Just d, path) <- found]
@@ -119,19 +175,22 @@ buildFontCache loader = do
       isDirectory <- doesDirectoryExist n
 
       if isDirectory then do
-        sub <- getDirectoryContents n 
+        sub <- getDirectoryContents n
         (++) <$> build [(s, n </> s) | s <- sub]
              <*> build rest
       else do
-        f <- loader n
-        case f of
-          Nothing -> build rest
-          Just fo -> ((descriptorOf fo, n) :) <$> build rest
+        isFile <- doesFileExist n
+        if isFile then do
+            f <- loader n
+            case f of
+              Nothing -> build rest
+              Just fo -> ((descriptorOf fo, n) :) <$> build rest
+        else build rest
 
 findFont :: (FilePath -> IO (Maybe Font)) -> String -> FontStyle
          -> IO (Maybe FilePath)
 findFont loader fontName fontStyle = do
-    folders <- fontFolders 
+    folders <- fontFolders
     searchIn [("", v) | v <- folders]
   where
     fontNameText = T.pack fontName
@@ -151,7 +210,7 @@ findFont loader fontName fontStyle = do
           findOrRest l = return l
 
       if isDirectory then do
-        sub <- getDirectoryContents n 
+        sub <- getDirectoryContents n
         subRez <- searchIn [(s, n </> s) | s <- sub]
         findOrRest subRez
       else do

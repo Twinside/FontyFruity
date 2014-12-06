@@ -20,7 +20,7 @@ import Data.Binary.Get( Get
 import Data.Binary.Put( putWord16be
                       , putWord32be )
 import Data.Int( Int16 )
-import Data.List( find, sortBy )
+import Data.List( find, sort, sortBy )
 import qualified Data.Map.Strict as M
 import Data.Maybe( fromMaybe )
 import Data.Word( Word8, Word16, Word32 )
@@ -163,8 +163,8 @@ charTableMap f = go
 
 findCharGlyph :: CharacterMaps -> LangId -> Char -> Int
 findCharGlyph (CharacterMaps charMaps) langId character =
-    fromMaybe 0 $ find (/= 0)
-        [charTableMap (flip glyphIdFromTable character) m
+    fromMaybe 0 . find (/= 0) . map snd . sort $
+        [(_charMapPlatformId allMap, charTableMap (`glyphIdFromTable` character) m)
                 | allMap <- charMaps
                 , let m = _charMap allMap
                 , isLangCompatible m]
@@ -174,13 +174,13 @@ findCharGlyph (CharacterMaps charMaps) langId character =
 
 instance Ord CharacterTable where
     compare (TableFormat0 v1) (TableFormat0 v2) =
-        (comparing langIdOfCharMap) v1 v2
+        comparing langIdOfCharMap v1 v2
     compare (TableFormat2 v1) (TableFormat2 v2) =
-        (comparing langIdOfCharMap) v1 v2
+        comparing langIdOfCharMap v1 v2
     compare (TableFormat4 v1) (TableFormat4 v2) =
-        (comparing langIdOfCharMap) v1 v2
+        comparing langIdOfCharMap v1 v2
     compare (TableFormat6 v1) (TableFormat6 v2) =
-        (comparing langIdOfCharMap) v1 v2
+        comparing langIdOfCharMap v1 v2
     compare (TableFormat0 _) _ = LT
     compare (TableFormat2 _) _ = LT
     compare (TableFormat4 _) _ = LT
@@ -268,7 +268,7 @@ instance Binary Format4 where
              $ concatMap (prepare segCount indexTable) rangeInfo
     where
       prepare _ _ (start, end, delta, 0, _) =
-        [(fromIntegral $ char, fromIntegral $ char + delta)
+        [(fromIntegral char, fromIntegral $ char + delta)
                     | char <- [start .. end]]
       prepare segCount indexTable
               (start, end, delta, rangeOffset, ix) =

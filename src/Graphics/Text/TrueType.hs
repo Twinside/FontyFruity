@@ -8,27 +8,37 @@ module Graphics.Text.TrueType
       decodeFont
     , loadFontFile
     , getStringCurveAtPoint
+    , unitsPerEm
+    , isPlaceholder
+    , getCharacterGlyphsAndMetrics
+    , getGlyphForStrings
     , stringBoundingBox
     , findFontOfFamily
 
       -- * Font cache
     , FontCache
     , FontDescriptor( .. )
+    , emptyFontCache
     , findFontInCache
     , buildCache
+    , enumerateFonts
 
       -- * Types
-    , Font( .. )
+    , Font
     , FontStyle( .. )
+    , RawGlyph( .. )
     , Dpi
     , PointSize
+    , CompositeScaling ( .. )
     ) where
 
 import Control.Applicative( (<$>) )
 import Control.Monad( foldM, forM )
 import Data.Function( on )
+import Data.Int ( Int16 )
 import Data.List( sortBy, mapAccumL, foldl' )
 import Data.Word( Word16 )
+import Data.Monoid( mempty )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead
@@ -120,13 +130,13 @@ getLoca font = return font
 getGlyph :: Font -> LB.ByteString -> Get Font
 getGlyph font@(Font { _fontLoca = Just locations }) str =
 
-  return font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval } 
+  return font { _fontGlyph = Just . V.map decoder $ VU.convert locationInterval }
       where decoder (xStart, xEnd)
                 | xEnd <= xStart = emptyGlyph
                 | otherwise =
                     decodeWithDefault emptyGlyph $ chop xStart xEnd
             chop start _ = LB.drop (fromIntegral start) str
-            locationsAll = locations `VU.snoc` (fromIntegral $ LB.length str)
+            locationsAll = locations `VU.snoc` fromIntegral (LB.length str)
             locationInterval = VU.zip locations $ VU.tail locationsAll
 getGlyph font _ = return font
 
@@ -149,7 +159,7 @@ fetchTables tableList offsetTable = do
           (B.unpack $ _tdeTag entry,) <$> getLazyByteString (fromIntegral $ _tdeLength entry)
 
     foldM (fetch tableData) (emptyFont offsetTable) tableList
-          
+
   where
     getFetch tables name getter =
       case [str | (n, str) <- tables, n == name] of
@@ -187,7 +197,7 @@ fetchTables tableList offsetTable = do
     fetch tables font "loca" =
       getFetch tables "loca" (getLoca font)
 
-    fetch tables font "hmtx" = do
+    fetch tables font "hmtx" =
       getFetch tables "hmtx" (getHmtx font)
 
     fetch _ font _ = return font
@@ -201,7 +211,7 @@ getFontNameAndStyle :: Get Font
 getFontNameAndStyle =
     (filterTable isNecessaryForName <$> get) >>= fetchTables ["head", "name"]
   where
-    isNecessaryForName v = v == "name" || v == "head" 
+    isNecessaryForName v = v == "name" || v == "head"
 
 -- | This function will search in the system for truetype
 -- files and index them in a cache for further fast search.
@@ -244,6 +254,7 @@ glyphOfStrings Font { _fontMap = Just mapping
     fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
 glyphOfStrings _ _ = []
 
+-- | Return the number of pixels relative to the point size.
 unitsPerEm :: Font -> Word16
 unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
@@ -299,8 +310,35 @@ getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
           getGlyphIndexCurvesAtPointSizeAndPos font dpi (toFCoord p maximumSize)
             (pointSize, glyph) (xi + bearing, yi)
 
+-- | This function return the list of all contour for all char with the given
+-- font in a string. All glyph are at the same position, they are not placed
+-- like with `getStringCurveAtPoint`. It is a function helpful to extract
+-- the glyph geometry for further external manipulation.
+getGlyphForStrings :: Dpi -> [(Font, PointSize, String)]
+                   -> [[VU.Vector (Float, Float)]]
+getGlyphForStrings dpi lst =  go <$> glyphes where
+  glyphes = concat
+    [(font, size, fromIntegral $ unitsPerEm font,)
+                            <$> glyphOfStrings font str | (font, size, str) <- lst]
 
-getGlyphIndexCurvesAtPointSizeAndPos :: Font -> Dpi -> Int -> (PointSize, Glyph) -> (Int, Int)
+  toFCoord (_, pointSize, emSize, _) v = floor $ v * emSize / pixelSize :: Int
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  toPixel pointSize emSize v = fromIntegral v * pixelSize / emSize
+    where
+      pixelSize = fromIntegral (pointSize * dpi) / 72
+
+  maximumSize :: Float
+  maximumSize = maximum [ toPixel pointSize em . _glfYMax $ _glyphHeader glyph
+                                | (_, pointSize, em, (glyph, _)) <- glyphes ]
+
+  go p@(font, pointSize, _, (glyph, _metric)) =
+    getGlyphIndexCurvesAtPointSizeAndPos
+        font dpi (toFCoord p maximumSize) (pointSize, glyph) (0, 0)
+
+getGlyphIndexCurvesAtPointSizeAndPos :: Font -> Dpi -> Int -> (PointSize, Glyph)
+                                     -> (Int, Int)
                                      -> [VU.Vector (Float, Float)]
 getGlyphIndexCurvesAtPointSizeAndPos Font { _fontHeader = Nothing } _ _ _ _ = []
 getGlyphIndexCurvesAtPointSizeAndPos Font { _fontGlyph = Nothing } _ _ _ _ = []
@@ -317,7 +355,7 @@ getGlyphIndexCurvesAtPointSizeAndPos
     maxiF = toPixelCoordinate (0 :: Int) maximumSize
     baseYF = toPixelCoordinate (0 :: Int) baseY
 
-    glyphReverse = VU.map (\(x,y) -> (x, maxiF - y + baseYF))
+    glyphReverse = VU.map (\(x,y) -> (x, baseYF - y))
 
     toPixelCoordinate shift coord =
         (fromIntegral (shift + fromIntegral coord) * pixelSize) / emSize
@@ -341,8 +379,8 @@ getGlyphIndexCurvesAtPointSizeAndPos
         cm = toFloat ci / m
         bn = toFloat ci / n
         dn = toFloat di / n
-        e = toFloat ei
-        f = toFloat fi
+        e = fromIntegral ei
+        f = fromIntegral fi
 
         updateCoords (x,y) =
             (m * (am * x + cm *y + e), n * (bn * x + dn * y + f))
@@ -351,6 +389,68 @@ getGlyphIndexCurvesAtPointSizeAndPos
     glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
         concatMap composeGlyph $ V.toList compositions
     glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
-        [ VU.map (\(x, y) -> (toPixelCoordinate baseX x, toPixelCoordinate (0 :: Int) y)) c
-                | c <- extractFlatOutline countour]
+        [ VU.map mapper c | c <- extractFlatOutline countour]
+      where
+        mapper (x,y) =
+          (toPixelCoordinate baseX x, toPixelCoordinate (0 :: Int) y)
+
+-- | True if the character is not present in the font, therefore it
+-- will appear as a placeholder in renderings.
+isPlaceholder :: Font -> Char -> Bool
+isPlaceholder Font { _fontMap = Just fontMap } character =
+    findCharGlyph fontMap 0 character == 0
+isPlaceholder Font { _fontMap = Nothing } _ = True
+
+-- | Retrive the glyph contours and associated transformations.
+-- The coordinate system is assumed to be the TTF one (y upward).
+-- No transformation is performed.
+getCharacterGlyphsAndMetrics :: Font
+                             -> Char
+                             -> (Float, V.Vector RawGlyph) -- ^ Advance and glyph information.
+getCharacterGlyphsAndMetrics
+    Font { _fontMap = Just mapping
+         , _fontGlyph = Just allGlyphs
+         , _fontHorizontalMetrics = Just hmtx }
+        character =
+    (advance, getCharacterGlyphs allGlyphs allMetrics glyphIndex)
+  where
+    glyphIndex = findCharGlyph mapping 0 character
+    allMetrics = _glyphMetrics hmtx
+    metrics = allMetrics V.! glyphIndex
+    advance = fromIntegral (_hmtxAdvanceWidth metrics)
+getCharacterGlyphsAndMetrics _ _ = (0, mempty)
+
+-- | This type represent unscaled glyph information, everything
+-- is still in its raw form.
+data RawGlyph = RawGlyph
+    { -- | List of transformations to apply to the contour in order
+      -- to get their correct placement.
+      _rawGlyphCompositionScale :: ![CompositeScaling]
+
+      -- | Glyph index in the current font.
+    , _rawGlyphIndex            :: !Int
+
+      -- | Real Geometry of glyph, each vector contain one
+      -- contour.
+    , _rawGlyphContour          :: ![VU.Vector (Int16, Int16)]
+    }
+
+prependScale :: CompositeScaling -> RawGlyph -> RawGlyph
+prependScale scale rGlyph =
+    rGlyph { _rawGlyphCompositionScale = scale : _rawGlyphCompositionScale rGlyph }
+
+getCharacterGlyphs :: V.Vector Glyph -> V.Vector HorizontalMetric -> Int
+                   -> V.Vector RawGlyph
+getCharacterGlyphs allGlyphs allMetrics glyphIndex =
+    case _glyphContent (allGlyphs V.! glyphIndex) of
+      GlyphEmpty -> mempty
+      GlyphComposite compositions _ -> V.concatMap expandComposition compositions
+      GlyphSimple countour ->
+          V.singleton . RawGlyph mempty glyphIndex $ extractFlatOutline countour
+  where
+    recurse = getCharacterGlyphs allGlyphs allMetrics 
+
+    expandComposition GlyphComposition { _glyphCompositeIndex = index
+                                       , _glyphCompositionScale = scale } =
+      V.map (prependScale scale) . recurse $ fromIntegral index
 

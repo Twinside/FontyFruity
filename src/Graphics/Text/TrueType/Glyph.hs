@@ -49,7 +49,7 @@ data GlyphHeader = GlyphHeader
     deriving (Eq, Show)
 
 instance NFData GlyphHeader where
-  rnf (GlyphHeader _ _ _ _ _) = ()
+  rnf (GlyphHeader {}) = ()
 
 emptyGlyphHeader :: GlyphHeader
 emptyGlyphHeader = GlyphHeader 0 0 0 0 0
@@ -73,13 +73,21 @@ instance NFData GlyphContour where
     rnf (GlyphContour instr fl points) =
         instr `seq` fl `seq` points `seq` ()
 
+-- | Transformation matrix used to transform composite
+-- glyph
+--
+-- @
+--   | a b c |
+--   | d e f |
+-- @
+--
 data CompositeScaling = CompositeScaling
-    { _a :: {-# UNPACK #-} !Int16
-    , _b :: {-# UNPACK #-} !Int16
-    , _c :: {-# UNPACK #-} !Int16
-    , _d :: {-# UNPACK #-} !Int16
-    , _e :: {-# UNPACK #-} !Int16
-    , _f :: {-# UNPACK #-} !Int16
+    { _a :: {-# UNPACK #-} !Int16 -- ^ a coeff.
+    , _b :: {-# UNPACK #-} !Int16 -- ^ b coeff.
+    , _c :: {-# UNPACK #-} !Int16 -- ^ c coeff.
+    , _d :: {-# UNPACK #-} !Int16 -- ^ d coeff.
+    , _e :: {-# UNPACK #-} !Int16 -- ^ e coeff.
+    , _f :: {-# UNPACK #-} !Int16 -- ^ f coeff.
     }
     deriving (Eq, Show)
 
@@ -160,7 +168,9 @@ getCompositeOutline =
 
     getInt16be = fromIntegral <$> getWord16be
     getF2Dot14 = fromIntegral <$> getWord16be
-    getInt8 = fromIntegral <$> getWord8
+    getInt8 = fixByteSign . fromIntegral <$> getWord8
+
+    fixByteSign value = if value >= 0x80 then value - 0x100 else value
 
     aRG_1_AND_2_ARE_WORDS  = 0
     aRGS_ARE_XY_VALUES  = 1
@@ -217,7 +227,7 @@ instance Binary GlyphFlag where
             setter v (ix, True) = setBit v ix
     get = do
       tester <- testBit <$> getWord8
-      return $ GlyphFlag
+      return GlyphFlag
         { _flagOnCurve = tester 0
         , _flagXshort  = tester 1
         , _flagYShort  = tester 2
@@ -261,7 +271,7 @@ getCoords flags =
 
 extractFlatOutline :: GlyphContour
                    -> [VU.Vector (Int16, Int16)]
-extractFlatOutline contour = map go $ zip flagGroup coords
+extractFlatOutline contour = zipWith (curry go) flagGroup coords
   where
     allFlags = _glyphFlags contour
     coords = _glyphPoints contour
