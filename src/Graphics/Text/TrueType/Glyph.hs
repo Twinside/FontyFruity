@@ -73,13 +73,21 @@ instance NFData GlyphContour where
     rnf (GlyphContour instr fl points) =
         instr `seq` fl `seq` points `seq` ()
 
+-- | Transformation matrix used to transform composite
+-- glyph
+--
+-- @
+--   | a b c |
+--   | d e f |
+-- @
+--
 data CompositeScaling = CompositeScaling
-    { _a :: {-# UNPACK #-} !Int16
-    , _b :: {-# UNPACK #-} !Int16
-    , _c :: {-# UNPACK #-} !Int16
-    , _d :: {-# UNPACK #-} !Int16
-    , _e :: {-# UNPACK #-} !Int16
-    , _f :: {-# UNPACK #-} !Int16
+    { _a :: {-# UNPACK #-} !Int16 -- ^ a coeff.
+    , _b :: {-# UNPACK #-} !Int16 -- ^ b coeff.
+    , _c :: {-# UNPACK #-} !Int16 -- ^ c coeff.
+    , _d :: {-# UNPACK #-} !Int16 -- ^ d coeff.
+    , _e :: {-# UNPACK #-} !Int16 -- ^ e coeff.
+    , _f :: {-# UNPACK #-} !Int16 -- ^ f coeff.
     }
     deriving (Eq, Show)
 

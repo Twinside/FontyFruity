@@ -114,14 +114,23 @@ instance Binary FontDescriptor where
 -- | A font cache is a cache listing all the found
 -- fonts on the system, allowing faster font lookup
 -- once created
+--
+-- FontCache is an instance of binary, to get okish
+-- performance you should save it in a file somewhere
+-- instead of rebuilding it everytime!
+--
+-- The font cache is dependent on the version
+-- of rasterific, you must rebuild it for every
+-- version.
 newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
 
+-- | Font cache with no pre-existing fonts in it.
 emptyFontCache :: FontCache
 emptyFontCache = FontCache M.empty
 
 signature :: B.ByteString
-signature = "FontyFruity__FONTCACHE:0.3.1"
+signature = "FontyFruity__FONTCACHE:0.4"
 
 putFontCache :: FontCache -> Put
 putFontCache (FontCache cache) = do

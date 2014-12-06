@@ -24,7 +24,7 @@ module Graphics.Text.TrueType
     , enumerateFonts
 
       -- * Types
-    , Font( .. )
+    , Font
     , FontStyle( .. )
     , RawGlyph( .. )
     , Dpi
@@ -254,6 +254,7 @@ glyphOfStrings Font { _fontMap = Just mapping
     fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
 glyphOfStrings _ _ = []
 
+-- | Return the number of pixels relative to the point size.
 unitsPerEm :: Font -> Word16
 unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
