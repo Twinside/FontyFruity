@@ -344,7 +344,7 @@ getGlyphIndexCurvesAtPointSizeAndPos Font { _fontHeader = Nothing } _ _ _ _ = []
 getGlyphIndexCurvesAtPointSizeAndPos Font { _fontGlyph = Nothing } _ _ _ _ = []
 getGlyphIndexCurvesAtPointSizeAndPos
     Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs }
-        dpi maximumSize (pointSize, topGlyph) (baseX, baseY) = glyphReverse <$> glyphExtract topGlyph
+        dpi _maximumSize (pointSize, topGlyph) (baseX, baseY) = glyphReverse <$> glyphExtract topGlyph
   where
     go index | index >= V.length allGlyphs = []
              | otherwise = glyphExtract $ allGlyphs V.! index
@@ -352,7 +352,6 @@ getGlyphIndexCurvesAtPointSizeAndPos
     pixelSize = fromIntegral (pointSize * dpi) / 72
     emSize = fromIntegral $ _fUnitsPerEm hdr
 
-    maxiF = toPixelCoordinate (0 :: Int) maximumSize
     baseYF = toPixelCoordinate (0 :: Int) baseY
 
     glyphReverse = VU.map (\(x,y) -> (x, baseYF - y))
