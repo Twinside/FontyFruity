@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.CharacterMap
     ( TtfEncoding( .. )
     , CharacterMaps
@@ -6,7 +7,12 @@ module Graphics.Text.TrueType.CharacterMap
     , findCharGlyph
     ) where
 
-import Control.Applicative( (<$>), (<*>) )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq( NFData( .. ) )
 import Control.Monad( replicateM,  when, foldM  )
 import Data.Binary( Binary( .. ) )

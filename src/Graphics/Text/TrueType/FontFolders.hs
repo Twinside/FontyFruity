@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.FontFolders
     ( loadUnixFontFolderList
     , loadWindowsFontFolderList
@@ -11,10 +12,13 @@ module Graphics.Text.TrueType.FontFolders
     , enumerateFonts
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.Monad( when, replicateM )
-import Control.Applicative( (<$>), (<*>) )
-{-import Control.DeepSeq( ($!!) )-}
-{-import Data.Monoid( (<>) )-}
 import System.Directory( getDirectoryContents
                        , getHomeDirectory
                        , doesDirectoryExist

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.HorizontalInfo
     ( HorizontalHeader( .. )
     , HorizontalMetricsTable( .. )
@@ -5,7 +6,12 @@ module Graphics.Text.TrueType.HorizontalInfo
     , getHorizontalMetrics
     ) where
 
-import Control.Applicative( (<$>), (<*>) )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq( NFData( .. ) )
 import Control.Monad( when, replicateM_ )
 import Data.Word( Word16 )
