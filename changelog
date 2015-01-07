@@ -1,35 +1,38 @@
 -*-change-log-*-
 
+v0.4.1 January 2015
+ * Fixing: Warnings under GHC 7.1O
+
 v0.4
- * Adding function to get back unplaced glyph.
- * Adding Binary instance for Font cache.
- * Fixing font cache.
+ * Adding: function to get back unplaced glyph.
+ * Adding: Binary instance for Font cache.
+ * Fixing: font cache.
 
 v0.3 June 2014
- * Adding a font finding function
- * Adding a font cache type to speed-up frequent font
+ * Adding: a font finding function
+ * Adding: a font cache type to speed-up frequent font
    finding.
 
 v0.2.1 April 2014
- * Fixing some character map loading problem (again)
- * Fixing font loading with out of order tables
+ * Fixing: some character map loading problem (again)
+ * Fixing: font loading with out of order tables
 
 v0.2 March 2014
- * Fixing character map loading when identical table
+ * Fixing: character map loading when identical table
    offset are used.
- * Adding bounding box extraction for test snippet.
+ * Adding: bounding box extraction for test snippet.
 
 v0.1.0.4 February 2014
- * Fixing hackage's haddock generation
+ * Fixing: hackage's haddock generation
 
 v0.1.0.3 February 2014
  * Dropping base upper bound.
 
 v0.1.0.2 February 2014
- * Fixing compilation with old version of binary.
+ * Fixing: compilation with old version of binary.
 
 v0.1.0.1 February 2014
- * Fixing some missing information in the cabal file.
+ * Fixing: some missing information in the cabal file.
 
 v0.1 February 2014
  * Initial version.

@@ -1,10 +1,16 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Header
     ( FontHeader( .. )
     , FontStyle( .. )
     , HeaderFlags( .. )
     ) where
 
-import Control.Applicative( (<$>), (<*>) )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq( NFData( .. ) )
 import Data.Bits( (.|.), setBit, testBit )
 import Data.Binary( Binary( .. ) )

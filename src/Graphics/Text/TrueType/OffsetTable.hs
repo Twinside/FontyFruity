@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.OffsetTable
     ( OffsetTableHeader( .. )
     , OffsetTable( .. )
@@ -5,7 +6,12 @@ module Graphics.Text.TrueType.OffsetTable
     , filterTable
     ) where
 
-import Control.Applicative( (<$>), (<*>) )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Data.Word( Word16, Word32 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be

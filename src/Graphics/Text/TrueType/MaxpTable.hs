@@ -1,6 +1,12 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.MaxpTable( MaxpTable( .. ) ) where
 
-import Control.Applicative( (<$>), (<*>) )
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq( NFData( .. ) )
 import Data.Word( Word16 )
 import Data.Binary( Binary( .. ) )

@@ -1,4 +1,5 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Glyph
     ( GlyphHeader( .. )
     , GlyphContour( .. )
@@ -11,12 +12,17 @@ module Graphics.Text.TrueType.Glyph
     , emptyGlyph
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( mempty )
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq
-import Control.Applicative( (<$>), (<*>) )
 import Data.Bits( setBit, testBit, shiftL )
 import Data.Int( Int16 )
 import Data.List( mapAccumL, mapAccumR, zip4 )
-import Data.Monoid( mempty )
 import Data.Word( Word8, Word16 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get

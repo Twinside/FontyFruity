@@ -1,11 +1,17 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Types
     ( Fixed
     , FWord
     , F26Dot6( .. )
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<*>) )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Data.Int( Int32 )
-import Control.Applicative( (<$>), (<*>) )
 import Data.Word( Word16 )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be)

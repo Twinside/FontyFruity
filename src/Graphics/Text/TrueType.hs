@@ -32,13 +32,16 @@ module Graphics.Text.TrueType
     , CompositeScaling ( .. )
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( mempty )
+#endif
+
 import Control.Applicative( (<$>) )
 import Control.Monad( foldM, forM )
 import Data.Function( on )
 import Data.Int ( Int16 )
 import Data.List( sortBy, mapAccumL, foldl' )
 import Data.Word( Word16 )
-import Data.Monoid( mempty )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , bytesRead

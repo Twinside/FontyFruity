@@ -1,17 +1,23 @@
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Name
     ( NameTable
     , NameRecords
     , fontFamilyName
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
+import Data.Monoid( mempty )
+import Control.Applicative( (<*>), pure )
+#endif
+
+import Control.Applicative( (<$>) )
+
 import Control.DeepSeq( NFData( .. ) )
-import Control.Applicative( (<$>), (<*>), pure )
 import Control.Monad( when, replicateM )
 import Data.Foldable( asum )
 import Data.Function( on )
 import Data.List( maximumBy )
 import Data.Maybe( fromMaybe )
-import Data.Monoid( mempty )
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be, getByteString )
 import Data.Binary.Put( putWord16be )
