@@ -24,7 +24,7 @@ module Graphics.Text.TrueType
     , enumerateFonts
 
       -- * Types
-    , Font
+    , Font( .. ) -- to debug
     , FontStyle( .. )
     , RawGlyph( .. )
     , Dpi
