@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.Types
-    ( Fixed
-    , FWord
+    ( Fixed( .. )
+    , FWord( .. )
     , F26Dot6( .. )
     ) where
 

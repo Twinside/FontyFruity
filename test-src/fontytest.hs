@@ -6,6 +6,7 @@ import qualified Data.Vector as V
 import System.Environment( getArgs )
 
 import Graphics.Text.TrueType
+import Graphics.Text.TrueType.Internal
 
 dumpFont :: Font -> IO ()
 dumpFont font = do

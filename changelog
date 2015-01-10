@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.4.2 January 2015
+ * Adding: lower level access to the structure, without
+   guaranteed stability.
+
 v0.4.1 January 2015
  * Fixing: Warnings under GHC 7.1O
 

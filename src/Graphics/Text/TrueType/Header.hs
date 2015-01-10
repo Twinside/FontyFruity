@@ -51,6 +51,7 @@ instance Binary FontStyle where
     let bitAt = testBit styleWord
     return $ FontStyle (bitAt 0) (bitAt 1)
 
+-- | Font header
 data FontHeader = FontHeader
     { -- | Table version number	0x00010000 for version 1.0.
       _fHdrVersionNumber    :: !Fixed
@@ -113,6 +114,7 @@ instance Binary FontHeader where
             g64 = getWord64be
 
 
+-- | Header flags.
 data HeaderFlags = HeaderFlags
     { -- | Bit 0 - baseline for font at y=0;
       _hfBaselineY0           :: !Bool

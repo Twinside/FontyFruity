@@ -20,18 +20,20 @@ import Graphics.Text.TrueType.Name
 
 -- | Type representing a font.
 data Font = Font
-    { _fontOffsetTable       :: !OffsetTable
-    , _fontTables            :: ![(B.ByteString, B.ByteString)]
-    , _fontNames             :: Maybe NameTable
-    , _fontHeader            :: Maybe FontHeader
-    , _fontMaxp              :: Maybe MaxpTable
-    , _fontMap               :: Maybe CharacterMaps
-    , _fontGlyph             :: Maybe (V.Vector Glyph)
-    , _fontLoca              :: Maybe (VU.Vector Word32)
-    , _fontHorizontalHeader  :: Maybe HorizontalHeader
-    , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
-    }
-    deriving (Show)
+ { -- | Field discribing various offsets/positions of table
+   -- inside the font file. Not available for reading.
+   _fontOffsetTable       :: !OffsetTable
+ , _fontTables            :: ![(B.ByteString, B.ByteString)]
+ , _fontNames             :: Maybe NameTable
+ , _fontHeader            :: Maybe FontHeader
+ , _fontMaxp              :: Maybe MaxpTable
+ , _fontMap               :: Maybe CharacterMaps
+ , _fontGlyph             :: Maybe (V.Vector Glyph)
+ , _fontLoca              :: Maybe (VU.Vector Word32)
+ , _fontHorizontalHeader  :: Maybe HorizontalHeader
+ , _fontHorizontalMetrics :: Maybe HorizontalMetricsTable
+ }
+ deriving (Show)
 
 instance NFData Font where
     rnf font =
