@@ -23,7 +23,7 @@ import qualified Data.Vector as V
 
 import Graphics.Text.TrueType.Types
 
--- | Describe the "hmtx" TrueType table.
+-- | Describe the "hhea" TrueType table.
 data HorizontalHeader = HorizontalHeader
     { -- | Distance from baseline of highest ascender
       _hheaAscent  :: {-# UNPACK #-} !FWord

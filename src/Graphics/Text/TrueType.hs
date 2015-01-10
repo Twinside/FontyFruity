@@ -263,23 +263,39 @@ unitsPerEm Font { _fontHeader = Just hdr } =
     fromIntegral $ _fUnitsPerEm hdr
 unitsPerEm  _ = 1
 
+-- | String bounding box. with value for
+-- min/max.
+data BoundingBox = BoundingBox
+  { _xMin :: {-# UNPACK #-} !Float
+  , _yMin :: {-# UNPACK #-} !Float
+  , _xMax :: {-# UNPACK #-} !Float
+  , _yMax :: {-# UNPACK #-} !Float
+    -- | Should be 0 most of the times.
+  , _baselineHeight :: {-# UNPACK #-} !Float
+  }
+  deriving (Eq)
+
 -- | Compute the bounding box of a string displayed with a font at
 -- a given size. The resulting coordinate represent the width and the
 -- height in pixels.
-stringBoundingBox :: Font -> Dpi -> PointSize -> String -> (Float, Float)
+stringBoundingBox :: Font -> Dpi -> PointSize -> String -> BoundingBox
 stringBoundingBox font dpi size str =
-    foldl' go (0, 0) $ glyphOfStrings font str
+    BoundingBox 0 yMini width yMaxi 0
   where
+    (width, yMini, yMaxi) =
+        foldl' go (0, 0, 0) $ glyphOfStrings font str
+
     emSize = fromIntegral $ unitsPerEm font
 
     toPixel v = fromIntegral v * pixelSize / emSize
       where pixelSize = fromIntegral (size * dpi) / 72
 
-    go (xf, yf) (glyph, metric) = (width', height')
+    go (xf, yMin, yMax) (glyph, metric) = (width', yMin', yMax')
       where
         advance = _hmtxAdvanceWidth metric
         width' = xf + toPixel advance
-        height' = max yf . toPixel . _glfYMax $ _glyphHeader glyph
+        yMin' = max yMin. toPixel . _glfYMin $ _glyphHeader glyph
+        yMax' = max yMax. toPixel . _glfYMax $ _glyphHeader glyph
 
 
 -- | Extract a list of outlines for every char in the string.
