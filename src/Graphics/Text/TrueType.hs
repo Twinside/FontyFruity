@@ -29,7 +29,8 @@ module Graphics.Text.TrueType
     , RawGlyph( .. )
     , Dpi
     , PointSize
-    , CompositeScaling ( .. )
+    , CompositeScaling( .. )
+    , BoundingBox( .. )
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
