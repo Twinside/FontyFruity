@@ -14,6 +14,8 @@ module Graphics.Text.TrueType
     , getGlyphForStrings
     , stringBoundingBox
     , findFontOfFamily
+    , pointInPixelAtDpi
+    , pixelSizeInPointAtDpi
 
       -- * Font cache
     , FontCache
