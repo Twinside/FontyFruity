@@ -247,7 +247,26 @@ findFontOfFamily = findFont loader
 type Dpi = Int
 
 -- | Font size expressed in points.
-type PointSize = Int
+type PointSize = Float
+
+toPixelCoord :: (Integral a) => Font -> PointSize -> Dpi -> a -> Float
+toPixelCoord font pointSize dpi v =
+    (fromIntegral v * pointSize * fromIntegral dpi) / (72 * emSize)
+  where
+    emSize = fromIntegral $ unitsPerEm font
+
+toFCoord :: Integral a => Font -> PointSize -> Dpi -> Float -> a
+toFCoord font size dpi v = floor $ v * emSize / pixelSize
+  where
+    emSize = fromIntegral $ unitsPerEm font
+    pixelSize = size `pointInPixelAtDpi` dpi
+
+
+pointInPixelAtDpi :: PointSize -> Dpi -> Float
+pointInPixelAtDpi size dpi = (size * fromIntegral dpi) / 72
+
+pixelSizeInPointAtDpi :: Float -> Dpi -> PointSize
+pixelSizeInPointAtDpi pixelSize dpi = pixelSize * 72 / fromIntegral dpi
 
 glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
 glyphOfStrings Font { _fontMap = Just mapping
@@ -286,10 +305,8 @@ stringBoundingBox font dpi size str =
     (width, yMini, yMaxi) =
         foldl' go (0, 0, 0) $ glyphOfStrings font str
 
-    emSize = fromIntegral $ unitsPerEm font
-
-    toPixel v = fromIntegral v * pixelSize / emSize
-      where pixelSize = fromIntegral (size * dpi) / 72
+    toPixel :: Integral a => a -> Float
+    toPixel = toPixelCoord font size dpi
 
     go (xf, yMin, yMax) (glyph, metric) = (width', yMin', yMax')
       where
@@ -307,27 +324,22 @@ getStringCurveAtPoint :: Dpi            -- ^ Dot per inch of the output.
                       -> [(Font, PointSize, String)] -- ^ Text to draw
                       -> [[VU.Vector (Float, Float)]] -- ^ List of contours for each char
 getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
-  glyphes = concat [(font, size, fromIntegral $ unitsPerEm font,)
-                            <$> glyphOfStrings font str | (font, size, str) <- lst]
+  glyphes = concat [(font, size,)
+                         <$> glyphOfStrings font str | (font, size, str) <- lst]
 
-  toPixel (_, pointSize, emSize, _) v = fromIntegral v * pixelSize / emSize
-    where
-      pixelSize = fromIntegral (pointSize * dpi) / 72
-
-  toFCoord (_, pointSize, emSize, _) v = floor $ v * emSize / pixelSize
-    where
-      pixelSize = fromIntegral (pointSize * dpi) / 72
+  toPixel (font, pointSize, _) = toPixelCoord font pointSize dpi
+  toCoord (font, pointSize, _) = toFCoord font pointSize dpi
 
   maximumSize = maximum [ toPixel p . _glfYMax $ _glyphHeader glyph
-                                | p@(_, _, _, (glyph, _)) <- glyphes ]
+                                | p@(_, _, (glyph, _)) <- glyphes ]
 
-  go (xf, yf) p@(font, pointSize, _, (glyph, metric)) = ((toPixel p $ xi + advance, yf), curves)
+  go (xf, yf) p@(font, pointSize, (glyph, metric)) = ((toPixel p $ xi + advance, yf), curves)
     where
-      (xi, yi) = (toFCoord p xf, toFCoord p yf)
+      (xi, yi) = (toCoord p xf, toCoord p yf)
       bearing = fromIntegral $ _hmtxLeftSideBearing metric
       advance = fromIntegral $ _hmtxAdvanceWidth metric
       curves =
-          getGlyphIndexCurvesAtPointSizeAndPos font dpi (toFCoord p maximumSize)
+          getGlyphIndexCurvesAtPointSizeAndPos font dpi (toCoord p maximumSize)
             (pointSize, glyph) (xi + bearing, yi)
 
 -- | This function return the list of all contour for all char with the given
@@ -338,24 +350,18 @@ getGlyphForStrings :: Dpi -> [(Font, PointSize, String)]
                    -> [[VU.Vector (Float, Float)]]
 getGlyphForStrings dpi lst =  go <$> glyphes where
   glyphes = concat
-    [(font, size, fromIntegral $ unitsPerEm font,)
-                            <$> glyphOfStrings font str | (font, size, str) <- lst]
+    [(font, size,) <$> glyphOfStrings font str | (font, size, str) <- lst]
 
-  toFCoord (_, pointSize, emSize, _) v = floor $ v * emSize / pixelSize :: Int
-    where
-      pixelSize = fromIntegral (pointSize * dpi) / 72
-
-  toPixel pointSize emSize v = fromIntegral v * pixelSize / emSize
-    where
-      pixelSize = fromIntegral (pointSize * dpi) / 72
+  toCoord (font, pointSize, _) = toFCoord font pointSize dpi
 
   maximumSize :: Float
-  maximumSize = maximum [ toPixel pointSize em . _glfYMax $ _glyphHeader glyph
-                                | (_, pointSize, em, (glyph, _)) <- glyphes ]
+  maximumSize =
+     maximum [ toPixelCoord font pointSize dpi . _glfYMax $ _glyphHeader glyph
+                   | (font, pointSize, (glyph, _)) <- glyphes ]
 
-  go p@(font, pointSize, _, (glyph, _metric)) =
+  go p@(font, pointSize, (glyph, _metric)) =
     getGlyphIndexCurvesAtPointSizeAndPos
-        font dpi (toFCoord p maximumSize) (pointSize, glyph) (0, 0)
+        font dpi (toCoord p maximumSize) (pointSize, glyph) (0, 0)
 
 getGlyphIndexCurvesAtPointSizeAndPos :: Font -> Dpi -> Int -> (PointSize, Glyph)
                                      -> (Int, Int)
@@ -369,7 +375,7 @@ getGlyphIndexCurvesAtPointSizeAndPos
     go index | index >= V.length allGlyphs = []
              | otherwise = glyphExtract $ allGlyphs V.! index
 
-    pixelSize = fromIntegral (pointSize * dpi) / 72
+    pixelSize = pointSize `pointInPixelAtDpi` dpi
     emSize = fromIntegral $ _fUnitsPerEm hdr
 
     baseYF = toPixelCoordinate (0 :: Int) baseY
