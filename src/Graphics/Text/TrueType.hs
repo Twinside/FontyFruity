@@ -30,7 +30,7 @@ module Graphics.Text.TrueType
     , FontStyle( .. )
     , RawGlyph( .. )
     , Dpi
-    , PointSize
+    , PointSize( .. )
     , CompositeScaling( .. )
     , BoundingBox( .. )
     ) where
@@ -249,11 +249,16 @@ findFontOfFamily = findFont loader
 type Dpi = Int
 
 -- | Font size expressed in points.
-type PointSize = Float
+-- You must convert size expressed in pixels to point using
+-- the DPI information.
+-- See pixelSizeInPointAtDpi
+newtype PointSize = PointSize { getPointSize :: Float }
+    deriving (Eq, Show)
 
 toPixelCoord :: (Integral a) => Font -> PointSize -> Dpi -> a -> Float
 toPixelCoord font pointSize dpi v =
-    (fromIntegral v * pointSize * fromIntegral dpi) / (72 * emSize)
+    (fromIntegral v * getPointSize pointSize * fromIntegral dpi) /
+    (72 * emSize)
   where
     emSize = fromIntegral $ unitsPerEm font
 
@@ -265,10 +270,12 @@ toFCoord font size dpi v = floor $ v * emSize / pixelSize
 
 
 pointInPixelAtDpi :: PointSize -> Dpi -> Float
-pointInPixelAtDpi size dpi = (size * fromIntegral dpi) / 72
+pointInPixelAtDpi size dpi =
+    (getPointSize size * fromIntegral dpi) / 72
 
 pixelSizeInPointAtDpi :: Float -> Dpi -> PointSize
-pixelSizeInPointAtDpi pixelSize dpi = pixelSize * 72 / fromIntegral dpi
+pixelSizeInPointAtDpi pixelSize dpi =
+    PointSize $ (pixelSize / fromIntegral dpi) * 72
 
 glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
 glyphOfStrings Font { _fontMap = Just mapping
