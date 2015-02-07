@@ -23,6 +23,7 @@ import qualified Data.Vector as V
 
 import Graphics.Text.TrueType.Types
 
+-- | Describe the "hhea" TrueType table.
 data HorizontalHeader = HorizontalHeader
     { -- | Distance from baseline of highest ascender
       _hheaAscent  :: {-# UNPACK #-} !FWord
@@ -86,6 +87,7 @@ instance Binary HorizontalHeader where
     startHdr <$> (fromIntegral <$> getWord16be)
              <*> getWord16be
 
+-- | Information of horizontal advance.
 data HorizontalMetric = HorizontalMetric
     { _hmtxAdvanceWidth    :: {-# UNPACK #-} !Word16
     , _hmtxLeftSideBearing :: {-# UNPACK #-} !Int16
@@ -99,6 +101,8 @@ instance Binary HorizontalMetric where
     get = HorizontalMetric <$> g16 <*> (fromIntegral <$> g16)
       where g16 = getWord16be
 
+-- | For every glyph (indexed by the glyph index),
+-- provide horizontal information.
 data HorizontalMetricsTable = HorizontalMetricsTable
     { _glyphMetrics :: !(V.Vector HorizontalMetric)
     }

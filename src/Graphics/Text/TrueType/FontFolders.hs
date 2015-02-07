@@ -33,7 +33,7 @@ import Data.Binary.Get( Get
 import Data.Binary.Put( Put
                       , putWord32be
                       , putByteString )
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import System.Environment( lookupEnv )
 import System.FilePath( (</>) )
 {-
@@ -128,13 +128,14 @@ instance Binary FontDescriptor where
 -- version.
 newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+    deriving Show
 
 -- | Font cache with no pre-existing fonts in it.
 emptyFontCache :: FontCache
 emptyFontCache = FontCache M.empty
 
 signature :: B.ByteString
-signature = "FontyFruity__FONTCACHE:0.4"
+signature = "FontyFruity__FONTCACHE:0.5"
 
 putFontCache :: FontCache -> Put
 putFontCache (FontCache cache) = do
@@ -164,7 +165,8 @@ buildFontCache loader = do
   folders <- fontFolders
   found <- build [("", v) | v <- folders]
   return . FontCache
-         $ M.fromList [(d, path) | (Just d, path) <- found]
+         $ M.fromList [(d, path) | (Just d, path) <- found
+                                 , _descriptorFamilyName d /= ""]
   where
     descriptorOf Font { _fontHeader = Just hdr
                       , _fontNames = Just names} =
