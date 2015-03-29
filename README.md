@@ -2,6 +2,7 @@ FontyFruity
 ===========
 
 [![Build Status](https://travis-ci.org/Twinside/FontyFruity.png?branch=master)](https://travis-ci.org/Twinside/FontyFruity)
+[![Hackage](https://img.shields.io/hackage/v/FontyFruity.svg)](http://hackage.haskell.org/package/FontyFruity)
 
 An haskell Truetype file parser.
 
