@@ -65,7 +65,7 @@ Executable fontytest
     Main-Is: fontytest.hs
     Hs-Source-Dirs: test-src
     ghc-prof-options: -rtsopts -Wall -prof
-    Build-Depends: base >= 4.6
+    Build-Depends: base >= 4.5
                  , FontyFruity
                  , directory   >= 1.2
                  , bytestring
