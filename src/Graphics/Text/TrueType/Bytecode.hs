@@ -2,11 +2,11 @@
 module Graphics.Text.TrueType.Bytecode where
 
 #if !MIN_VERSION_base(4,8,0)
+import Control.Applicative( (<$>) )
 import Data.Monoid( mempty )
 #endif
 
 import Prelude hiding ( EQ, GT, LT )
-import Control.Applicative( (<$>) )
 {-import Control.Monad.State.Strict( modify )-}
 import Data.Bits( (.&.), testBit )
 import Data.Binary.Get( Get, getWord8, getWord16be )

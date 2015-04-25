@@ -6,10 +6,8 @@ module Graphics.Text.TrueType.Header
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>) )
+import Control.Applicative( (<*>), (<$>) )
 #endif
-
-import Control.Applicative( (<$>) )
 
 import Control.DeepSeq( NFData( .. ) )
 import Data.Bits( (.|.), setBit, testBit )

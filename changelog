@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5.1 April 2015
+  * Fix: Fixing the bounding box returned by stringBoundingBox 
+  * Fix: All warning of GHC 7.10 final
+
 v0.5 January 2015
  * BREAKING CHANGE: the point size is now Float!
 

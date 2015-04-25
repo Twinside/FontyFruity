@@ -36,10 +36,9 @@ module Graphics.Text.TrueType
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Data.Monoid( mempty )
+import Data.Monoid( (<$>), mempty )
 #endif
 
-import Control.Applicative( (<$>) )
 import Control.Monad( foldM, forM )
 import Data.Function( on )
 import Data.Int ( Int16 )
@@ -309,10 +308,15 @@ data BoundingBox = BoundingBox
 -- height in pixels.
 stringBoundingBox :: Font -> Dpi -> PointSize -> String -> BoundingBox
 stringBoundingBox font dpi size str =
-    BoundingBox 0 yMini width yMaxi 0
+    BoundingBox xMini yMini width yMaxi 0
   where
+    glyphs = glyphOfStrings font str
+    xMini = case glyphs of
+        [] -> 0
+        (glyph, _):_ -> toPixel . _glfXMin $ _glyphHeader glyph
+
     (width, yMini, yMaxi) =
-        foldl' go (0, 0, 0) $ glyphOfStrings font str
+        foldl' go (- xMini, 0, 0) glyphs
 
     toPixel :: Integral a => a -> Float
     toPixel = toPixelCoord font size dpi
@@ -321,7 +325,7 @@ stringBoundingBox font dpi size str =
       where
         advance = _hmtxAdvanceWidth metric
         width' = xf + toPixel advance
-        yMin' = max yMin. toPixel . _glfYMin $ _glyphHeader glyph
+        yMin' = min yMin. toPixel . _glfYMin $ _glyphHeader glyph
         yMax' = max yMax. toPixel . _glfYMax $ _glyphHeader glyph
 
 

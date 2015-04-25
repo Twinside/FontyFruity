@@ -7,10 +7,8 @@ module Graphics.Text.TrueType.Name
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid( mempty )
-import Control.Applicative( (<*>), pure )
+import Control.Applicative( (<$>), (<*>), pure )
 #endif
-
-import Control.Applicative( (<$>) )
 
 import Control.DeepSeq( NFData( .. ) )
 import Control.Monad( when, replicateM )

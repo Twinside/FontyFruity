@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.LanguageIds
     ( PlatformId( .. )
     , UnicodePlatformSpecific( .. )
@@ -8,7 +9,10 @@ module Graphics.Text.TrueType.LanguageIds
     , unicodePlatformSpecificToId
     ) where
 
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative( (<$>) )
+#endif
+
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( getWord16be )
 import Data.Binary.Put( putWord16be )
