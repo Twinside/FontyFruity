@@ -11,4 +11,3 @@ to be drawed with a library like [Rasterific](https://github.com/Twinside/Raster
 
 FontyFruity is Rasterific's text processing back-end
 
-
