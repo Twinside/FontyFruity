@@ -317,7 +317,7 @@ stringBoundingBox font dpi size str =
         (glyph, _):_ -> toPixel . _glfXMin $ _glyphHeader glyph
 
     (width, yMini, yMaxi) =
-        foldl' go (- xMini, 0, 0) glyphs
+        foldl' go (0, 0, 0) glyphs
 
     toPixel :: Integral a => a -> Float
     toPixel = toPixelCoord font size dpi
