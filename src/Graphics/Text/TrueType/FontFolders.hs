@@ -80,7 +80,7 @@ lookupEnv varName = do
   v <- tryJust (guard . isDoesNotExistError) $ getEnv varName
   case v of
     Left _ -> return Nothing
-    Right v -> return $ Just v
+    Right val -> return $ Just val
 #endif
 
 loadUnixFontFolderList :: IO [FilePath]
