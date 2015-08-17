@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+
+v0.5.2 August 2015
+ * Fix: GHC 7.4 compilation
+
 v0.5.1.1 April 2015
  * Fix: compilation on older compilers
 
