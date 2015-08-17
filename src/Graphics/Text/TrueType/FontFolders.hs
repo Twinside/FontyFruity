@@ -16,6 +16,15 @@ module Graphics.Text.TrueType.FontFolders
 import Control.Applicative( (<*>), (<$>) )
 #endif
 
+#if !MIN_VERSION_base(4,6,0)
+import Control.Monad( guard )
+import Control.Exception( tryJust )
+import System.IO.Error( isDoesNotExistError )
+import System.Environment( getEnv )
+#else
+import System.Environment( lookupEnv )
+#endif
+
 import Control.Monad( when, replicateM )
 import System.Directory( getDirectoryContents
                        , getHomeDirectory
@@ -32,7 +41,6 @@ import Data.Binary.Put( Put
                       , putWord32be
                       , putByteString )
 import qualified Data.Map.Strict as M
-import System.Environment( lookupEnv )
 import System.FilePath( (</>) )
 {-
 import Text.XML.HXT.Core( runX
@@ -66,6 +74,14 @@ loadParseFontsConf = runX (
             >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
 
 -- -}
+#if !MIN_VERSION_base(4,6,0)
+lookupEnv :: String -> IO (Maybe String)
+lookupEnv varName = do
+  v <- tryJust (guard . isDoesNotExistError) $ getEnv varName
+  case v of
+    Left _ -> return Nothing
+    Right v -> return $ Just v
+#endif
 
 loadUnixFontFolderList :: IO [FilePath]
 loadUnixFontFolderList =
