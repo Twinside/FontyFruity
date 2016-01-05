@@ -238,6 +238,9 @@ findFont loader fontName fontStyle = do
         subRez <- searchIn [(s, n </> s) | s <- sub]
         findOrRest subRez
       else do
-        font <- loader n
-        findOrRest $ font >>= isMatching n
+        isFile <- doesFileExist n
+        if isFile then do
+          font <- loader n
+          findOrRest $ font >>= isMatching n
+        else searchIn rest
 
