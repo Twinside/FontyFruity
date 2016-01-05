@@ -14,10 +14,17 @@ module Graphics.Text.TrueType.FontFolders
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>) )
+import Control.Applicative( (<*>), (<$>) )
 #endif
 
-import Control.Applicative( (<$>) )
+#if !MIN_VERSION_base(4,6,0)
+import Control.Monad( guard )
+import Control.Exception( tryJust )
+import System.IO.Error( isDoesNotExistError )
+import System.Environment( getEnv )
+#else
+import System.Environment( lookupEnv )
+#endif
 
 import Control.Monad( when, replicateM )
 import System.Directory( getDirectoryContents
@@ -34,8 +41,7 @@ import Data.Binary.Get( Get
 import Data.Binary.Put( Put
                       , putWord32be
                       , putByteString )
-import qualified Data.Map as M
-import System.Environment( lookupEnv )
+import qualified Data.Map.Strict as M
 import System.FilePath( (</>) )
 {-
 import Text.XML.HXT.Core( runX
@@ -69,6 +75,14 @@ loadParseFontsConf = runX (
             >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
 
 -- -}
+#if !MIN_VERSION_base(4,6,0)
+lookupEnv :: String -> IO (Maybe String)
+lookupEnv varName = do
+  v <- tryJust (guard . isDoesNotExistError) $ getEnv varName
+  case v of
+    Left _ -> return Nothing
+    Right val -> return $ Just val
+#endif
 
 loadUnixFontFolderList :: IO [FilePath]
 loadUnixFontFolderList =
@@ -129,13 +143,14 @@ instance Binary FontDescriptor where
 -- version.
 newtype FontCache =
     FontCache (M.Map FontDescriptor FilePath)
+    deriving Show
 
 -- | Font cache with no pre-existing fonts in it.
 emptyFontCache :: FontCache
 emptyFontCache = FontCache M.empty
 
 signature :: B.ByteString
-signature = "FontyFruity__FONTCACHE:0.4"
+signature = "FontyFruity__FONTCACHE:0.5"
 
 putFontCache :: FontCache -> Put
 putFontCache (FontCache cache) = do
@@ -173,7 +188,8 @@ buildFontCache loader = do
   folders <- fontFolders
   found <- build [("", v) | v <- folders]
   return . FontCache
-         $ M.fromList [(d, path) | (Just d, path) <- found]
+         $ M.fromList [(d, path) | (Just d, path) <- found
+                                 , _descriptorFamilyName d /= ""]
   where
     build [] = return []
     build ((".", _):rest) = build rest
