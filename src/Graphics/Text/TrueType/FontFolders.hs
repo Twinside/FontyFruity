@@ -10,6 +10,7 @@ module Graphics.Text.TrueType.FontFolders
     , emptyFontCache
     , buildFontCache
     , enumerateFonts
+    , descriptorOf
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -35,7 +36,7 @@ import qualified Data.ByteString as B
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , getWord32be
-                      , getByteString 
+                      , getByteString
                       )
 import Data.Binary.Put( Put
                       , putWord32be
@@ -173,6 +174,14 @@ instance Binary FontCache where
 enumerateFonts :: FontCache -> [FontDescriptor]
 enumerateFonts (FontCache fs) = M.keys fs
 
+-- | If possible, returns a descriptor of the Font.
+descriptorOf :: Font -> Maybe FontDescriptor
+descriptorOf Font { _fontHeader = Just hdr
+                      , _fontNames = Just names} =
+        Just $ FontDescriptor (fontFamilyName names)
+                              (_fHdrMacStyle hdr)
+descriptorOf _ = Nothing
+
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache
 buildFontCache loader = do
@@ -182,12 +191,6 @@ buildFontCache loader = do
          $ M.fromList [(d, path) | (Just d, path) <- found
                                  , _descriptorFamilyName d /= ""]
   where
-    descriptorOf Font { _fontHeader = Just hdr
-                      , _fontNames = Just names} =
-        Just $ FontDescriptor (fontFamilyName names)
-                              (_fHdrMacStyle hdr)
-    descriptorOf _ = Nothing
-
     build [] = return []
     build ((".", _):rest) = build rest
     build (("..", _):rest) = build rest
