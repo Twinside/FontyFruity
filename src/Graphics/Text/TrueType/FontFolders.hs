@@ -119,9 +119,9 @@ fontFolders = do
 -- in a font cache.
 data FontDescriptor = FontDescriptor
     { -- | The family name of the font
-      _descriptorFamilyName :: T.Text
+      _descriptorFamilyName :: !T.Text
       -- | The desired style
-    , _descriptorStyle :: FontStyle
+    , _descriptorStyle :: !FontStyle
     }
     deriving (Eq, Ord, Show)
 
