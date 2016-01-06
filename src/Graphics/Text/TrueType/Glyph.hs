@@ -14,10 +14,8 @@ module Graphics.Text.TrueType.Glyph
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Monoid( mempty )
-import Control.Applicative( (<*>) )
+import Control.Applicative( (<*>), (<$>) )
 #endif
-
-import Control.Applicative( (<$>) )
 
 import Control.DeepSeq
 import Data.Bits( setBit, testBit, shiftL )

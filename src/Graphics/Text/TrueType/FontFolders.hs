@@ -5,6 +5,7 @@ module Graphics.Text.TrueType.FontFolders
     , loadWindowsFontFolderList
     , fontFolders
     , findFont
+    , descriptorOf
     , FontCache( .. )
     , FontDescriptor( .. )
     , emptyFontCache
@@ -120,9 +121,9 @@ fontFolders = do
 -- in a font cache.
 data FontDescriptor = FontDescriptor
     { -- | The family name of the font
-      _descriptorFamilyName :: T.Text
+      _descriptorFamilyName :: !T.Text
       -- | The desired style
-    , _descriptorStyle :: FontStyle
+    , _descriptorStyle :: !FontStyle
     }
     deriving (Eq, Ord, Show)
 
@@ -176,11 +177,10 @@ enumerateFonts (FontCache fs) = M.keys fs
 
 -- | If possible, returns a descriptor of the Font.
 descriptorOf :: Font -> Maybe FontDescriptor
-descriptorOf Font { _fontHeader = Just hdr
-                      , _fontNames = Just names} =
-        Just $ FontDescriptor (fontFamilyName names)
-                              (_fHdrMacStyle hdr)
-descriptorOf _ = Nothing
+descriptorOf font = do
+  hdr <- _fontHeader font
+  names <- _fontNames font
+  return $ FontDescriptor (fontFamilyName names) (_fHdrMacStyle hdr)
 
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache
