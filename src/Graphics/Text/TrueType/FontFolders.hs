@@ -5,6 +5,7 @@ module Graphics.Text.TrueType.FontFolders
     , loadWindowsFontFolderList
     , fontFolders
     , findFont
+    , descriptorOf
     , FontCache( .. )
     , FontDescriptor( .. )
     , emptyFontCache
@@ -119,9 +120,9 @@ fontFolders = do
 -- in a font cache.
 data FontDescriptor = FontDescriptor
     { -- | The family name of the font
-      _descriptorFamilyName :: T.Text
+      _descriptorFamilyName :: !T.Text
       -- | The desired style
-    , _descriptorStyle :: FontStyle
+    , _descriptorStyle :: !FontStyle
     }
     deriving (Eq, Ord, Show)
 
@@ -173,6 +174,15 @@ instance Binary FontCache where
 enumerateFonts :: FontCache -> [FontDescriptor]
 enumerateFonts (FontCache fs) = M.keys fs
 
+
+-- | If possible, returns a descriptor of the Font.
+descriptorOf :: Font -> Maybe FontDescriptor
+descriptorOf font = do
+  hdr <- _fontHeader font
+  names <- _fontNames font
+  return $ FontDescriptor (fontFamilyName names) (_fHdrMacStyle hdr)
+
+
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache
 buildFontCache loader = do
@@ -182,12 +192,6 @@ buildFontCache loader = do
          $ M.fromList [(d, path) | (Just d, path) <- found
                                  , _descriptorFamilyName d /= ""]
   where
-    descriptorOf Font { _fontHeader = Just hdr
-                      , _fontNames = Just names} =
-        Just $ FontDescriptor (fontFamilyName names)
-                              (_fHdrMacStyle hdr)
-    descriptorOf _ = Nothing
-
     build [] = return []
     build ((".", _):rest) = build rest
     build (("..", _):rest) = build rest
@@ -234,6 +238,9 @@ findFont loader fontName fontStyle = do
         subRez <- searchIn [(s, n </> s) | s <- sub]
         findOrRest subRez
       else do
-        font <- loader n
-        findOrRest $ font >>= isMatching n
+        isFile <- doesFileExist n
+        if isFile then do
+          font <- loader n
+          findOrRest $ font >>= isMatching n
+        else searchIn rest
 
