@@ -24,6 +24,7 @@ module Graphics.Text.TrueType
     , findFontInCache
     , buildCache
     , enumerateFonts
+    , descriptorOf
 
       -- * Types
     , Font
