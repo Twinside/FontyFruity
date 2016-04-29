@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 module Graphics.Text.TrueType.FontFolders
     ( loadUnixFontFolderList
     , loadWindowsFontFolderList
@@ -14,67 +14,135 @@ module Graphics.Text.TrueType.FontFolders
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
-import Control.Applicative( (<*>), (<$>) )
+import           Control.Applicative             ((<$>), (<*>))
 #endif
 
 #if !MIN_VERSION_base(4,6,0)
-import Control.Monad( guard )
-import Control.Exception( tryJust )
-import System.IO.Error( isDoesNotExistError )
-import System.Environment( getEnv )
+import           Control.Exception               (tryJust)
+import           Control.Monad                   (guard)
+import           System.Environment              (getEnv)
+import           System.IO.Error                 (isDoesNotExistError)
 #else
-import System.Environment( lookupEnv )
+import           System.Environment              (lookupEnv)
 #endif
 
-import Control.Monad( when, replicateM )
-import System.Directory( getDirectoryContents
-                       , getHomeDirectory
-                       , doesDirectoryExist
-                       , doesFileExist
-                       )
-import qualified Data.ByteString as B
-import Data.Binary( Binary( .. ) )
-import Data.Binary.Get( Get
-                      , getWord32be
-                      , getByteString 
-                      )
-import Data.Binary.Put( Put
-                      , putWord32be
-                      , putByteString )
-import qualified Data.Map.Strict as M
-import System.FilePath( (</>) )
-{-
-import Text.XML.HXT.Core( runX
-                        , readDocument
-                        , withValidate
-                        , withSubstDTDEntities
-                        , no
-                        , multi
-                        , getChildren
-                        , isElem
-                        , hasName
-                        , getText
-                        , (>>>) )
--- -}
+import           Control.Monad                   (replicateM, when)
+import           Data.Binary                     (Binary (..))
+import           Data.Binary.Get                 (Get, getByteString,
+                                                  getWord32be)
+import           Data.Binary.Put                 (Put, putByteString,
+                                                  putWord32be)
+import qualified Data.ByteString                 as B
+import qualified Data.Map.Strict                 as M
+import           System.Directory                (doesDirectoryExist,
+                                                  doesFileExist,
+                                                  getDirectoryContents,
+                                                  getHomeDirectory)
+import           System.FilePath                 ((</>))
 
-{-import qualified Control.Exception as E-}
-import qualified Data.Text as T
+-- import           Text.XML.HXT.Core               (getChildren, getText, hasName,
+--                                                   isElem, multi, no,
+--                                                   readDocument, runX,
+--                                                   withSubstDTDEntities,
+--                                                   withValidate, (>>>))
 
-import Graphics.Text.TrueType.FontType
-import Graphics.Text.TrueType.Header
-import Graphics.Text.TrueType.Name
+import qualified Text.XML.Light                  as X
 
-{-catchAny :: IO a -> (E.SomeException -> IO a) -> IO a-}
-{-catchAny = E.catch-}
+import qualified Control.Exception               as E
+import qualified Data.Text                       as T
+import qualified Data.Text.IO                    as T
 
-{-
+import           Control.DeepSeq                 (($!!))
+import           Debug.Trace
+
+import           Graphics.Text.TrueType.FontType
+import           Graphics.Text.TrueType.Header
+import           Graphics.Text.TrueType.Name
+
+import           Data.Foldable                   (toList)
+import           Data.Function                   ((&))
+
+import           Text.PrettyPrint.ANSI.Leijen    (Pretty (pretty))
+import qualified Text.PrettyPrint.ANSI.Leijen    as PP
+
+import           Data.List                       (intersperse)
+import           Data.Monoid
+
+import           System.IO.Unsafe
+
+intercalate :: (Monoid a) => a -> [a] -> a
+intercalate e xs = mconcat $ intersperse e xs
+
+instance Pretty X.QName where
+  pretty (X.QName n _ _) = PP.string n
+
+instance Pretty X.Attr where
+  pretty (X.Attr k v) = PP.cyan (pretty k) <> "=" <> PP.red (PP.dquotes (PP.string v))
+
+instance Pretty X.CData where
+  pretty = go
+    where
+      go (X.CData X.CDataText     s _) = textPP s -- should escape though
+      go (X.CData X.CDataVerbatim s _) = "<![CDATA[" <> cdataPP s <> "]]>"
+      go (X.CData X.CDataRaw      s _) = rawPP s
+      textPP  = PP.string
+      cdataPP = PP.string
+      rawPP   = PP.string
+
+instance Pretty X.Content where
+  pretty (X.Elem el)  = pretty el
+  pretty (X.Text cd)  = pretty cd
+  pretty (X.CRef str) = PP.onyellow $ PP.string str
+
+instance Pretty X.Element where
+  pretty (X.Element name attrs contents _) = PP.flatAlt multiLine oneLine
+    where
+      oneLine = openTagPP <> contentsPP <> closeTagPP
+      multiLine = openTagPP <> PP.hardline <> contentsPP <> PP.hardline <> closeTagPP
+      attrsPP = mconcat $ map ((PP.space <>) . pretty) attrs
+      openTagPP  = PP.blue $ PP.langle <> pretty name <> attrsPP <> PP.rangle
+      closeTagPP = PP.blue $ PP.langle <> "/" <> pretty name <> PP.rangle
+      contentsPP = let cs = map pretty contents
+                   in PP.indent 1 $ PP.flatAlt (PP.vcat cs) (PP.sep cs)
+
+catchAny :: IO a -> (E.SomeException -> IO a) -> IO a
+catchAny = E.catch
+
+prettyPrint :: (Pretty p) => p -> IO ()
+prettyPrint = PP.putDoc . pretty
+
+prettyTrace :: (Pretty p) => p -> p
+prettyTrace x = unsafePerformIO (prettyPrint x >> return x)
+
 loadParseFontsConf :: IO [FilePath]
-loadParseFontsConf = runX (
-        readDocument [withValidate no, withSubstDTDEntities no]
-                     "/etc/fonts/fonts.conf"
-            >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
+loadParseFontsConf = getPaths . T.pack . munchWS . T.unpack . T.map replaceWS
+                     <$> T.readFile "/etc/fonts/fonts.conf"
+  where
+    munchWS (' ':' ':xs) = munchWS (' ':xs)
+    munchWS (x:xs)       = x : munchWS xs
+    munchWS []           = []
+    replaceWS '\n' = ' '
+    replaceWS '\t' = ' '
+    replaceWS x    = x
+    getPaths :: T.Text -> [FilePath]
+    getPaths s = X.parseXML s
+                 & X.onlyElems
+                 & concatMap X.elChildren
+                 & filter isDir
+                 & map X.strContent
+                 & map traceShowId
+    isDir :: X.Element -> Bool
+    isDir = (== "dir") . X.qName . X.elName
 
--- -}
+-- loadParseFontsConf :: IO [FilePath]
+-- loadParseFontsConf = runX (readDoc "/etc/fonts/fonts.conf"
+--                            >>> multi (isElem
+--                                       >>> hasName "dir"
+--                                       >>> getChildren
+--                                       >>> getText))
+--   where
+--     readDoc = readDocument [withValidate no, withSubstDTDEntities no]
+
 #if !MIN_VERSION_base(4,6,0)
 lookupEnv :: String -> IO (Maybe String)
 lookupEnv varName = do
@@ -85,14 +153,12 @@ lookupEnv varName = do
 #endif
 
 loadUnixFontFolderList :: IO [FilePath]
-loadUnixFontFolderList =
+loadUnixFontFolderList = catchAny
+                         (do conf <- loadParseFontsConf
+                             return $!! (</> "truetype") <$> conf)
+                         (const $ return [])
     -- Quick hack, need to change XML parser to a lighter one
-    return ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts"]
-    {-
-   catchAny (do conf <- loadParseFontsConf
-                return $!! (</> "truetype") <$> conf)
-            (const $ return [])
-            --}
+    --return ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts"]
 
 loadWindowsFontFolderList :: IO [FilePath]
 loadWindowsFontFolderList = toFontFolder <$> lookupEnv "Windir"
@@ -122,7 +188,7 @@ data FontDescriptor = FontDescriptor
     { -- | The family name of the font
       _descriptorFamilyName :: !T.Text
       -- | The desired style
-    , _descriptorStyle :: !FontStyle
+    , _descriptorStyle      :: !FontStyle
     }
     deriving (Eq, Ord, Show)
 
