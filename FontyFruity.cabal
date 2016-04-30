@@ -58,10 +58,8 @@ library
                , directory
                , text
                , filepath
-               , deepseq >= 1.2
-               , xml
-               , hxt
-               , ansi-wl-pprint
+               , deepseq    >= 1.2
+               , xml        >= 1.3
 
 Executable fontytest
     default-language:    Haskell2010
@@ -75,7 +73,4 @@ Executable fontytest
                  , vector
                  , filepath
                  , binary
-                 , xml
-                 , hxt
-                 , ansi-wl-pprint
 
