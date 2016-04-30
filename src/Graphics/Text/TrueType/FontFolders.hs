@@ -36,7 +36,7 @@ import qualified Data.ByteString as B
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , getWord32be
-                      , getByteString 
+                      , getByteString
                       )
 import Data.Binary.Put( Put
                       , putWord32be
@@ -60,7 +60,6 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.Name
 
 import Control.DeepSeq (($!!))
-import Data.Function ((&))
 
 catchAny :: IO a -> (E.SomeException -> IO a) -> IO a
 catchAny = E.catch
@@ -68,11 +67,11 @@ catchAny = E.catch
 loadParseFontsConf :: IO [FilePath]
 loadParseFontsConf = getPaths <$> T.readFile "/etc/fonts/fonts.conf"
   where
-    getPaths s = parseXML s
-                 & onlyElems
-                 & concatMap elChildren
-                 & filter ((== "dir") . qName . elName)
-                 & map strContent
+    getPaths s = map strContent
+                 $ filter ((== "dir") . qName . elName)
+                 $ concatMap elChildren
+                 $ onlyElems
+                 $ parseXML s
 
 #if !MIN_VERSION_base(4,6,0)
 lookupEnv :: String -> IO (Maybe String)
@@ -240,4 +239,3 @@ findFont loader fontName fontStyle = do
           font <- loader n
           findOrRest $ font >>= isMatching n
         else searchIn rest
-
