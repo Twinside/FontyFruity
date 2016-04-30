@@ -36,45 +36,43 @@ import qualified Data.ByteString as B
 import Data.Binary( Binary( .. ) )
 import Data.Binary.Get( Get
                       , getWord32be
-                      , getByteString 
+                      , getByteString
                       )
 import Data.Binary.Put( Put
                       , putWord32be
                       , putByteString )
 import qualified Data.Map.Strict as M
 import System.FilePath( (</>) )
-{-
-import Text.XML.HXT.Core( runX
-                        , readDocument
-                        , withValidate
-                        , withSubstDTDEntities
-                        , no
-                        , multi
-                        , getChildren
-                        , isElem
-                        , hasName
-                        , getText
-                        , (>>>) )
--- -}
 
-{-import qualified Control.Exception as E-}
+import Text.XML.Light( elChildren
+                     , elName
+                     , onlyElems
+                     , parseXML
+                     , qName
+                     , strContent )
+
+import qualified Control.Exception as E
 import qualified Data.Text as T
+import qualified Data.Text.IO as T (readFile)
 
 import Graphics.Text.TrueType.FontType
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.Name
 
-{-catchAny :: IO a -> (E.SomeException -> IO a) -> IO a-}
-{-catchAny = E.catch-}
+import Control.DeepSeq (($!!))
 
-{-
+catchAny :: IO a -> (E.SomeException -> IO a) -> IO a
+catchAny = E.catch
+
 loadParseFontsConf :: IO [FilePath]
-loadParseFontsConf = runX (
-        readDocument [withValidate no, withSubstDTDEntities no]
-                     "/etc/fonts/fonts.conf"
-            >>> multi (isElem >>> hasName "dir" >>> getChildren >>> getText))
+loadParseFontsConf = getPaths <$> T.readFile "/etc/fonts/fonts.conf"
+  where
+    getPaths s = map strContent
+                 $ filter ((== "dir") . qName . elName)
+                 $ concatMap elChildren
+                 $ onlyElems
+                 $ parseXML s
 
--- -}
 #if !MIN_VERSION_base(4,6,0)
 lookupEnv :: String -> IO (Maybe String)
 lookupEnv varName = do
@@ -85,14 +83,12 @@ lookupEnv varName = do
 #endif
 
 loadUnixFontFolderList :: IO [FilePath]
-loadUnixFontFolderList =
-    -- Quick hack, need to change XML parser to a lighter one
-    return ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts"]
-    {-
-   catchAny (do conf <- loadParseFontsConf
-                return $!! (</> "truetype") <$> conf)
-            (const $ return [])
-            --}
+loadUnixFontFolderList = catchAny
+                         (do conf <- loadParseFontsConf
+                             return $!! conf ++ map (</> "truetype") conf)
+                         (const $ return defaults)
+  where
+    defaults = ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts"]
 
 loadWindowsFontFolderList :: IO [FilePath]
 loadWindowsFontFolderList = toFontFolder <$> lookupEnv "Windir"
@@ -243,4 +239,3 @@ findFont loader fontName fontStyle = do
           font <- loader n
           findOrRest $ font >>= isMatching n
         else searchIn rest
-
