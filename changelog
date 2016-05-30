@@ -1,5 +1,8 @@
 -*-change-log-*-
 
+v0.5.3.2 May 2016
+ * Fix: Bumping base bounds
+
 v0.5.3(.1) February 2016
  * Fix: bug when trying to scan a directory
  * Addition: exposing descriptorOf function
