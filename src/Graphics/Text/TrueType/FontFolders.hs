@@ -11,6 +11,7 @@ module Graphics.Text.TrueType.FontFolders
     , emptyFontCache
     , buildFontCache
     , enumerateFonts
+    , descriptorOf
     ) where
 
 #if !MIN_VERSION_base(4,8,0)
@@ -170,14 +171,12 @@ instance Binary FontCache where
 enumerateFonts :: FontCache -> [FontDescriptor]
 enumerateFonts (FontCache fs) = M.keys fs
 
-
 -- | If possible, returns a descriptor of the Font.
 descriptorOf :: Font -> Maybe FontDescriptor
 descriptorOf font = do
   hdr <- _fontHeader font
   names <- _fontNames font
   return $ FontDescriptor (fontFamilyName names) (_fHdrMacStyle hdr)
-
 
 -- | Look in the system's folder for usable fonts.
 buildFontCache :: (FilePath -> IO (Maybe Font)) -> IO FontCache

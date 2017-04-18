@@ -13,6 +13,7 @@ module Graphics.Text.TrueType
     , getCharacterGlyphsAndMetrics
     , getGlyphForStrings
     , stringBoundingBox
+    , descriptorOf
     , findFontOfFamily
     , pointInPixelAtDpi
     , pixelSizeInPointAtDpi
@@ -488,7 +489,7 @@ getCharacterGlyphs allGlyphs allMetrics glyphIndex =
       GlyphSimple countour ->
           V.singleton . RawGlyph mempty glyphIndex $ extractFlatOutline countour
   where
-    recurse = getCharacterGlyphs allGlyphs allMetrics 
+    recurse = getCharacterGlyphs allGlyphs allMetrics
 
     expandComposition GlyphComposition { _glyphCompositeIndex = index
                                        , _glyphCompositionScale = scale } =
