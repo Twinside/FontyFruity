@@ -385,7 +385,7 @@ getGlyphIndexCurvesAtPointSizeAndPos Font { _fontHeader = Nothing } _ _ _ _ = []
 getGlyphIndexCurvesAtPointSizeAndPos Font { _fontGlyph = Nothing } _ _ _ _ = []
 getGlyphIndexCurvesAtPointSizeAndPos
     Font { _fontHeader = Just hdr, _fontGlyph = Just allGlyphs }
-        dpi _maximumSize (pointSize, topGlyph) (baseX, baseY) = glyphReverse <$> glyphExtract topGlyph
+        dpi _maximumSize (pointSize, topGlyph) (baseX, baseY) = glyphFixup <$> glyphExtract topGlyph
   where
     go index | index >= V.length allGlyphs = []
              | otherwise = glyphExtract $ allGlyphs V.! index
@@ -393,46 +393,64 @@ getGlyphIndexCurvesAtPointSizeAndPos
     pixelSize = pointSize `pointInPixelAtDpi` dpi
     emSize = fromIntegral $ _fUnitsPerEm hdr
 
-    baseYF = toPixelCoordinate (0 :: Int) baseY
+    glyphFixup = VU.map (\(x,y) ->
+                     ( toPixelCoordinate baseX x
+                     , toPixelCoordinate baseY (-1 * y)
+                     ))
 
-    glyphReverse = VU.map (\(x,y) -> (x, baseYF - y))
+    toFloat v   = fromIntegral v / 0x4000 :: Float
+    fromFloat v = truncate (v * 0x4000)
 
     toPixelCoordinate shift coord =
         (fromIntegral (shift + fromIntegral coord) * pixelSize) / emSize
 
-    composeGlyph composition = VU.map updateCoords <$> subCurves
+    composeGlyph base composition = VU.map updateCoords <$> subCurves
       where
         subCurves = go . fromIntegral $ _glyphCompositeIndex composition
-        toFloat v = fromIntegral v / (0x4000 :: Float)
-        CompositeScaling ai bi ci di ei fi = _glyphCompositionScale composition
+        CompositeScaling xx xy yx yy = _glyphCompositionScale composition
+        useOffsets                   = _glyphCompositionOffsetArgs composition
+        (e,f)                        = _glyphCompositionArg composition
 
-        scaler v1 v2
-            | fromIntegral (abs (abs ai - abs ci)) <= (33 / 65536 :: Float) = 2 * vf
-            | otherwise = vf
-          where
-           vf = toFloat $ max (abs v1) (abs v2)
+        -- according to a comment in Freetype's source code, the algorithm given
+        -- in Apple documentation is wrong. We use the same algorithm as
+        -- Freetype except that we go through Float to compute the square root
+        -- instead of staying in Fixed 2.14 (or Fixed 16.16 as in Freetype).
 
-        m = scaler ai bi
-        n = scaler ci di
+        (xx',xy',yx',yy') = (toFloat xx, toFloat xy, toFloat yx, toFloat yy)
 
-        am = toFloat ai / m
-        cm = toFloat ci / m
-        bn = toFloat ci / n
-        dn = toFloat di / n
-        e = fromIntegral ei
-        f = fromIntegral fi
+        xscale
+          | xy == 0   = xx'
+          | xx == 0   = xy'
+          | otherwise = sqrt (xx' * xx' + xy' * xy')
+        yscale
+          | yy == 0   = yx'
+          | yx == 0   = yy'
+          | otherwise = sqrt (yx' * yx' + yy' * yy')
 
-        updateCoords (x,y) =
-            (m * (am * x + cm *y + e), n * (bn * x + dn * y + f))
+        basePoints = VU.concat (_glyphPoints base)
+        (offX,offY)
+          | useOffsets = (e,f)
+          | otherwise  = (fst b1 - fst b2, snd b1 - snd b2)
+               where
+                  b1 = basePoints VU.! (fromIntegral e)
+                  b2 = basePoints VU.! (fromIntegral f)
+
+        updateCoords (x,y) = ( fromFloat (toFloat x * xscale + toFloat offX)
+                             , fromFloat (toFloat y * yscale + toFloat offY)
+                             )
+
+    -- recursively find the base contour of a compound glyph
+    glyphBase g = case _glyphContent g of
+      GlyphEmpty          -> error "Invalid glyph base index"
+      GlyphComposite cs _ ->
+         glyphBase (allGlyphs V.! fromIntegral (_glyphCompositeIndex (V.head cs)))
+      GlyphSimple contour -> contour
 
     glyphExtract Glyph { _glyphContent = GlyphEmpty } = []
-    glyphExtract Glyph { _glyphContent = GlyphComposite compositions _ } =
-        concatMap composeGlyph $ V.toList compositions
-    glyphExtract Glyph { _glyphContent = GlyphSimple countour } =
-        [ VU.map mapper c | c <- extractFlatOutline countour]
-      where
-        mapper (x,y) =
-          (toPixelCoordinate baseX x, toPixelCoordinate (0 :: Int) y)
+    glyphExtract g@Glyph { _glyphContent = GlyphComposite compositions _ } =
+        concatMap (composeGlyph (glyphBase g)) $ V.toList compositions
+    glyphExtract Glyph { _glyphContent = GlyphSimple contour } =
+        extractFlatOutline contour
 
 -- | True if the character is not present in the font, therefore it
 -- will appear as a placeholder in renderings.

@@ -81,8 +81,8 @@ instance NFData GlyphContour where
 -- glyph
 --
 -- @
---   | a b c |
---   | d e f |
+--   | a b |
+--   | c d |
 -- @
 --
 data CompositeScaling = CompositeScaling
@@ -90,16 +90,16 @@ data CompositeScaling = CompositeScaling
     , _b :: {-# UNPACK #-} !Int16 -- ^ b coeff.
     , _c :: {-# UNPACK #-} !Int16 -- ^ c coeff.
     , _d :: {-# UNPACK #-} !Int16 -- ^ d coeff.
-    , _e :: {-# UNPACK #-} !Int16 -- ^ e coeff.
-    , _f :: {-# UNPACK #-} !Int16 -- ^ f coeff.
     }
     deriving (Eq, Show)
 
 data GlyphComposition = GlyphComposition
-    { _glyphCompositeFlag    :: {-# UNPACK #-} !Word16
-    , _glyphCompositeIndex   :: {-# UNPACK #-} !Word16
-    , _glyphCompositionArg   :: {-# UNPACK #-} !(Int16, Int16)
-    , _glyphCompositionScale :: !CompositeScaling
+    { _glyphCompositeFlag         :: {-# UNPACK #-} !Word16
+    , _glyphCompositeIndex        :: {-# UNPACK #-} !Word16
+    , _glyphCompositionArg        :: {-# UNPACK #-} !(Int16, Int16)
+    , _glyphCompositionOffsetArgs :: !Bool -- ^ True: args are offsets;
+                                           --   False: args are point indices
+    , _glyphCompositionScale      :: !CompositeScaling
     }
     deriving (Eq, Show)
 
@@ -131,8 +131,8 @@ getCompositeOutline =
       index <- getWord16be
       args <- fetchArguments flag
       scaling <- fetchScaling flag
-      let fullScaling = fetchOffset scaling args flag
-          value = GlyphComposition flag index args fullScaling
+      let value = GlyphComposition flag index args
+                     (flag `testBit` aRGS_ARE_XY_VALUES) scaling
 
       if flag `testBit` mORE_COMPONENTS then
           (\(instr, acc) -> (instr, value : acc )) <$> go
@@ -160,15 +160,6 @@ getCompositeOutline =
                              <*> getF2Dot14 <*> getF2Dot14
         | otherwise = return $ CompositeScaling one 0 0 one
            where one = 1 `shiftL` 14
-
-    fetchOffset scaling (a1, a2) flag
-        | flag `testBit` aRGS_ARE_XY_VALUES = scaling a1 a2
-        | otherwise = scaling 0 0 -- TODO fix this crap
-
-    {--
-    if (!ARGS_ARE_XY_VALUES)
-        1st short contains the index of matching point in compound being constructed
-        2nd short contains index of matching point in component -}
 
     getInt16be = fromIntegral <$> getWord16be
     getF2Dot14 = fromIntegral <$> getWord16be
