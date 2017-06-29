@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5.3.3 June 2017
+ * Fix: Composite glyph positionning (patch from hsyl20)
+ * Fix: glyph lookup (patch from hsyl20)
+
 v0.5.3.2 May 2016
  * Fix: Bumping base bounds
 
