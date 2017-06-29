@@ -19,11 +19,22 @@ import Data.Binary.Put( putWord16be )
 import Data.Word( Word16 )
 import qualified Data.Map.Strict as M
 
+-- Note [PlatformID sorting]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~
+--
+-- Unicode and Windows are the two preferred encodings according to Apple's
+-- documentation. Indeed some fonts (e.g., Bitstream Vera Mono) return the wrong
+-- glyphs if we use Macintosh encoding instead of Windows one.
+--
+-- To fix this, the Ord instance for PlatformId ensures that:
+--    Unicode < Windows < Macintosh
+-- 
+
 data PlatformId
-    = PlatformUnicode   -- ^ 0
+    = PlatformUnicode   -- ^ 0 Don't change the ordering (see Note [PlatformID sorting])
+    | PlatformWindows   -- ^ 3 
     | PlatformMacintosh -- ^ 1
     | PlatformISO       -- ^ 2
-    | PlatformWindows   -- ^ 3
     | PlatformCustom    -- ^ 4
     | PlatformId Word16
     deriving (Eq, Ord, Show)
