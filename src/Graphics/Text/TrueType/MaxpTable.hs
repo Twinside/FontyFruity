@@ -12,7 +12,7 @@ import Data.Binary.Get( getWord16be )
 
 import Graphics.Text.TrueType.Types
 
-data MaxpTable = MaxpTable 
+data MaxpTable = MaxpTable
     { -- | version number	0x00010000 for version 1.0.
       _maxpTableVersion :: !Fixed
     -- | The number of glyphs in the font.
@@ -29,7 +29,7 @@ data MaxpTable = MaxpTable
     , _maxpmaxZones :: !Word16
     -- | Maximum points used in Z0.
     , _maxpmaxTwilightPoints :: !Word16
-    -- | Number of Storage Area locations. 
+    -- | Number of Storage Area locations.
     , _maxpmaxStorage :: !Word16
     -- | Number of FDEFs.
     , _maxpmaxFunctionDefs :: !Word16
@@ -50,10 +50,9 @@ instance NFData MaxpTable where
     rnf (MaxpTable {}) = ()
 
 instance Binary MaxpTable where
-    put _ = fail "Unimplemented"
-    get = MaxpTable 
+    put _ = error "Unimplemented"
+    get = MaxpTable
        <$> get <*> g16 <*> g16 <*> g16 <*> g16 <*> g16
        <*> g16 <*> g16 <*> g16 <*> g16 <*> g16 <*> g16
        <*> g16 <*> g16 <*> g16
          where g16 = getWord16be
-

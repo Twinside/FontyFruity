@@ -35,7 +35,7 @@ instance NFData NameTable where
     rnf (NameTable {}) = ()
 
 instance Binary NameTable where
-  put _ = fail "Binary.put NameTable - unimplemented"
+  put _ = error "Binary.put NameTable - unimplemented"
   get = do
     nameFormatId <- getWord16be
     when (nameFormatId /= 0) $
@@ -110,13 +110,11 @@ fontFamilyName (NameTable { _ntRecords = records }) =
       _nrPlatformSpecificId r == semanticUnicode2
 
 instance Binary NameRecords where
-  get = NameRecords <$> g16 <*> g16 <*> g16 
-                    <*> g16 <*> g16 <*> g16 
+  get = NameRecords <$> g16 <*> g16 <*> g16
+                    <*> g16 <*> g16 <*> g16
                     <*> pure mempty
       where g16 = getWord16be
 
   put (NameRecords p ps l n len ofs _) =
       p16 p >> p16 ps >> p16 l >> p16 n >> p16 len >> p16 ofs
     where p16 = putWord16be
-
-
