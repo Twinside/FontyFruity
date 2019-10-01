@@ -45,7 +45,7 @@ instance Binary FontStyle where
         | otherwise = 0
 
   get = do
-    styleWord <- getWord16be 
+    styleWord <- getWord16be
     let bitAt = testBit styleWord
     return $ FontStyle (bitAt 0) (bitAt 1)
 
@@ -58,7 +58,7 @@ data FontHeader = FontHeader
       -- | To compute:  set it to 0, sum the entire font as
       -- ULONG, then store 0xB1B0AFBA - sum.
     , _fHdrChecksumAdjust   :: !Word32
-     
+
       -- | Should be equal to 0x5F0F3CF5.
     , _fHdrMagicNumber      :: !Word32
     , _fHdrFlags            :: !HeaderFlags
@@ -100,7 +100,7 @@ instance NFData FontHeader where
   rnf (FontHeader {}) = ()
 
 instance Binary FontHeader where
-  put _ = fail "Unimplemented"
+  put _ = error "Unimplemented"
   get =
     FontHeader <$> get <*> get <*> g32 <*> g32 <*> get
                <*> g16 <*> g64 <*> g64 <*> get <*> get
@@ -140,4 +140,3 @@ instance Binary HeaderFlags where
       putWord16be . foldl' setter 0 $ zip [0..] [a0, a1, a2, a3, a4]
         where setter acc (_, False) = acc
               setter acc (ix, True) = setBit acc ix
-
