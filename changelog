@@ -1,5 +1,9 @@
 -*-change-log-*-
 
+v0.5.3.5 Septermeber 2019
+ * Fix: GHC 8.8.1 compat
+	 how regular
+
 v0.5.3.4 September 2018
  * Fix: GHC 8.6.1 compat
 

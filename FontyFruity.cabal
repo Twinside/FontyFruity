@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                FontyFruity
-version:             0.5.3.4
+version:             0.5.3.5
 synopsis:            A true type file format loader
 description:         
     An haskell Truetype file parser.
