@@ -102,7 +102,7 @@ instance NFData CharacterMaps where
   rnf (CharacterMaps maps) = rnf maps `seq` ()
 
 instance Binary CharacterMaps where
-  put _ = fail "Unimplemented"
+  put _ = error "Unimplemented"
   get = do
       startIndex <- bytesRead
       versionNumber <- getWord16be
@@ -113,7 +113,7 @@ instance Binary CharacterMaps where
           third (_, _, t) = t
       tableDesc <-
           sortBy (comparing third) <$> replicateM tableCount descFetcher
-          
+
 
       let fetcher (allMaps, lst) (platformId, platformSpecific, offset)
               | M.member offset allMaps = case M.lookup offset allMaps of
@@ -128,7 +128,7 @@ instance Binary CharacterMaps where
               mapData <- get
               let charMap = CharacterMap platformId platformSpecific mapData
               return (M.insert offset mapData allMaps, charMap : lst)
- 
+
       (_, tables) <- foldM fetcher (M.empty, []) tableDesc
       return . CharacterMaps $ sortBy (comparing _charMap) tables
 
@@ -173,7 +173,7 @@ findCharGlyph (CharacterMaps charMaps) langId character =
                 , let m = _charMap allMap
                 , isLangCompatible m]
   where
-    isLangCompatible v = tableLang == 0 || tableLang == langId 
+    isLangCompatible v = tableLang == 0 || tableLang == langId
       where tableLang = charTableMap langIdOfCharMap v
 
 instance Ord CharacterTable where
@@ -192,7 +192,7 @@ instance Ord CharacterTable where
     compare _ _ = GT
 
 instance Binary CharacterTable where
-    put _ = fail "Binary.put CharacterTable - Unimplemented"
+    put _ = error "Binary.put CharacterTable - Unimplemented"
     get = do
       format <- getWord16be
       case format of
@@ -301,11 +301,11 @@ instance CharMappeable Format0 where
     | ic > VU.length table = 0
     | otherwise = fromIntegral $ table VU.! ic
         where ic = fromEnum v
-        
+
   langIdOfCharMap = _format0Language
 
 instance Binary Format0 where
-    put _ = fail "Binary.Format0.put - unimplemented"
+    put _ = error "Binary.Format0.put - unimplemented"
     get = do
         tableSize <- getWord16be
         when (tableSize /= 262) $
@@ -347,7 +347,7 @@ instance Binary Format2SubHeader where
 
 
 instance Binary Format2 where
-    put _ = fail "Format2.put - unimplemented"
+    put _ = error "Format2.put - unimplemented"
     get = do
       _tableSize <- getWord16be
       lang <- getWord16be
@@ -376,7 +376,7 @@ instance CharMappeable Format6 where
   langIdOfCharMap = _format6Language
 
 instance Binary Format6 where
-    put _ = fail "Format6.put - unimplemented"
+    put _ = error "Format6.put - unimplemented"
     get = do
         _length <- getWord16be
         language <- getWord16be

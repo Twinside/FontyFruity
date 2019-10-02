@@ -254,7 +254,7 @@ getCoords flags =
         let fetcher
               | isShort flag && isSame flag =
                   (prevCoord +) . fromIntegral <$> getWord8
-              | isShort flag = 
+              | isShort flag =
                   (prevCoord - ) . fromIntegral <$> getWord8
               | isSame flag =
                   return prevCoord
@@ -273,7 +273,7 @@ extractFlatOutline contour = zipWith (curry go) flagGroup coords
     (_, flagGroup) =
       mapAccumL (\acc v -> swap $ splitAt (VU.length v) acc) allFlags coords
 
-    go (flags, coord) 
+    go (flags, coord)
       | VU.null coord = mempty
       | otherwise = VU.fromList . (firstPoint :) $ expand mixed
       where
@@ -288,7 +288,7 @@ extractFlatOutline contour = zipWith (curry go) flagGroup coords
        expand [(onp, on, prevPoint, currPoint)]
         | onp == on = (prevPoint `midPoint` currPoint) : endJunction
         | otherwise = endJunction
-         where endJunction 
+         where endJunction
                 | on && firstOnCurve =
                     [currPoint, currPoint `midPoint` firstPoint, firstPoint]
                 | otherwise = [currPoint, firstPoint]
@@ -313,10 +313,9 @@ getSimpleOutline counterCount = do
           where breaker array ix = VU.splitAt (fromIntegral ix + 1) array
 
 instance Binary Glyph where
-    put _ = fail "Glyph.put - unimplemented"
+    put _ = error "Glyph.put - unimplemented"
     get = do
       hdr <- get
       case _glfNumberOfContours hdr of
         -1 -> Glyph hdr <$> getCompositeOutline
         n -> Glyph hdr <$> getSimpleOutline n
-
