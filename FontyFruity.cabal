@@ -37,6 +37,7 @@ library
                , Graphics.Text.TrueType.MaxpTable
                , Graphics.Text.TrueType.Header
                , Graphics.Text.TrueType.Glyph
+               , Graphics.Text.TrueType.Kerning
                , Graphics.Text.TrueType.Types
                , Graphics.Text.TrueType.OffsetTable
                , Graphics.Text.TrueType.CharacterMap

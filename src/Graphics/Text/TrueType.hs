@@ -79,6 +79,7 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
 import Graphics.Text.TrueType.HorizontalInfo
+import Graphics.Text.TrueType.Kerning (getKerningValue)
 import Graphics.Text.TrueType.Name()
 import Graphics.Text.TrueType.FontType
 import Graphics.Text.TrueType.FontFolders
@@ -207,12 +208,16 @@ fetchTables tableList offsetTable = do
     fetch tables font "hmtx" =
       getFetch tables "hmtx" (getHmtx font)
 
+    fetch tables font "kern" = do
+      table <- getFetch tables "kern" get
+      return $ font { _fontKerning = Just table }
+
     fetch _ font _ = return font
 
 getFont :: Get Font
 getFont = get >>= fetchTables allTables
   where
-    allTables = ["head", "maxp", "cmap", "name", "hhea",  "loca", "glyf", "hmtx"]
+    allTables = ["head", "maxp", "cmap", "name", "hhea",  "loca", "glyf", "hmtx", "kern"]
 
 getFontNameAndStyle :: Get Font
 getFontNameAndStyle =
@@ -281,10 +286,16 @@ pixelSizeInPointAtDpi pixelSize dpi =
 glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
 glyphOfStrings Font { _fontMap = Just mapping
                     , _fontGlyph = Just glyphes
+                    , _fontKerning = Just kernPairs
                     , _fontHorizontalMetrics = Just hmtx } str =
-    fetcher . findCharGlyph mapping 0 <$> str
+    fetcher <$> glyphIndexPairs
   where
-    fetcher ix = (glyphes V.! ix, _glyphMetrics hmtx V.! ix)
+    glyphIndexPairs = zip glyphIndexes (tail glyphIndexes <> [0])
+    glyphIndexes = findCharGlyph mapping 0 <$> str
+    kerning l r = getKerningValue (fromIntegral l) (fromIntegral r) kernPairs
+    kern l r m = m { _hmtxAdvanceWidth = _hmtxAdvanceWidth m + kerning l r }
+    metrics = _glyphMetrics hmtx
+    fetcher (l, r) = (glyphes V.! l, kern l r (metrics V.! l))
 glyphOfStrings _ _ = []
 
 -- | Return the number of pixels relative to the point size.
@@ -351,11 +362,10 @@ getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
   go (xf, yf) p@(font, pointSize, (glyph, metric)) = ((toPixel p $ xi + advance, yf), curves)
     where
       (xi, yi) = (toCoord p xf, toCoord p yf)
-      bearing = fromIntegral $ _hmtxLeftSideBearing metric
       advance = fromIntegral $ _hmtxAdvanceWidth metric
       curves =
           getGlyphIndexCurvesAtPointSizeAndPos font dpi (toCoord p maximumSize)
-            (pointSize, glyph) (xi + bearing, yi)
+            (pointSize, glyph) (xi, yi)
 
 -- | This function return the list of all contour for all char with the given
 -- font in a string. All glyph are at the same position, they are not placed

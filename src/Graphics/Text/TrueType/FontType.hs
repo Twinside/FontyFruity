@@ -14,6 +14,7 @@ import Graphics.Text.TrueType.Glyph
 import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.OffsetTable
 import Graphics.Text.TrueType.CharacterMap
+import Graphics.Text.TrueType.Kerning
 import Graphics.Text.TrueType.HorizontalInfo
 import Graphics.Text.TrueType.Name
 
@@ -28,6 +29,7 @@ data Font = Font
  , _fontHeader            :: Maybe FontHeader
  , _fontMaxp              :: Maybe MaxpTable
  , _fontMap               :: Maybe CharacterMaps
+ , _fontKerning           :: Maybe KernTable
  , _fontGlyph             :: Maybe (V.Vector Glyph)
  , _fontLoca              :: Maybe (VU.Vector Word32)
  , _fontHorizontalHeader  :: Maybe HorizontalHeader
@@ -53,6 +55,7 @@ emptyFont table = Font
     , _fontMaxp              = Nothing
     , _fontLoca              = Nothing
     , _fontMap               = Nothing
+    , _fontKerning           = Nothing
     , _fontHorizontalHeader  = Nothing
     , _fontHorizontalMetrics = Nothing
     }
