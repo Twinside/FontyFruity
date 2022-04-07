@@ -60,6 +60,7 @@ import Graphics.Text.TrueType.Header
 import Graphics.Text.TrueType.Name
 
 import Control.DeepSeq (($!!))
+import Data.List
 
 catchAny :: IO a -> (E.SomeException -> IO a) -> IO a
 catchAny = E.catch
@@ -200,7 +201,7 @@ buildFontCache loader = do
              <*> build rest
       else do
         isFile <- doesFileExist n
-        if isFile then do
+        if isFile && (".ttf" `isSuffixOf` n) then do
             f <- loader n
             case f of
               Nothing -> build rest
