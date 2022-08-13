@@ -2,6 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
 -- | Module in charge of loading fonts.
 module Graphics.Text.TrueType
     ( -- * Functions
@@ -83,6 +84,7 @@ import Graphics.Text.TrueType.Kerning (getKerningValue)
 import Graphics.Text.TrueType.Name()
 import Graphics.Text.TrueType.FontType
 import Graphics.Text.TrueType.FontFolders
+import System.IO (hClose, IOMode (..), openFile)
 
 {-import Debug.Trace-}
 
@@ -228,10 +230,15 @@ getFontNameAndStyle =
 -- | This function will search in the system for truetype
 -- files and index them in a cache for further fast search.
 buildCache :: IO FontCache
-buildCache = buildFontCache loader
+buildCache = buildFontCache fontLoader
+
+fontLoader :: FilePath -> IO (Maybe Font)
+fontLoader n = do
+  h <- (openFile n ReadMode)
+  !x <- toMayb . getOrFail getFontNameAndStyle <$> LB.hGetContents h
+  hClose h
+  pure x
   where
-    loader n =
-        toMayb . getOrFail getFontNameAndStyle <$> LB.readFile n
     toMayb (Left _) = Nothing
     toMayb (Right v) = Just v
 
@@ -244,12 +251,7 @@ findFontInCache (FontCache cache) descr = M.lookup descr cache
 -- find a font with the desired properties. Favor using
 -- a FontCache to speed up the lookup process.
 findFontOfFamily :: String -> FontStyle -> IO (Maybe FilePath)
-findFontOfFamily = findFont loader
-  where
-    loader n =
-        toMayb . getOrFail getFontNameAndStyle <$> LB.readFile n
-    toMayb (Left _) = Nothing
-    toMayb (Right v) = Just v
+findFontOfFamily = findFont fontLoader
 
 -- | Express device resolution in dot per inch.
 type Dpi = Int
