@@ -21,7 +21,7 @@ import Graphics.Text.TrueType.Name
 
 -- | Type representing a font.
 data Font = Font
- { -- | Field discribing various offsets/positions of table
+ { -- | Field describing various offsets/positions of table
    -- inside the font file. Not available for reading.
    _fontOffsetTable       :: !OffsetTable
  , _fontTables            :: ![(B.ByteString, B.ByteString)]

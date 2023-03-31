@@ -225,7 +225,7 @@ getFontNameAndStyle =
   where
     isNecessaryForName v = v == "name" || v == "head"
 
--- | This function will search in the system for truetype
+-- | This function will search in the system for TrueType
 -- files and index them in a cache for further fast search.
 buildCache :: IO FontCache
 buildCache = buildFontCache loader
@@ -285,7 +285,7 @@ pixelSizeInPointAtDpi pixelSize dpi =
 
 glyphOfStrings :: Font -> String -> [(Glyph, HorizontalMetric)]
 glyphOfStrings Font { _fontMap = Just mapping
-                    , _fontGlyph = Just glyphes
+                    , _fontGlyph = Just glyphs
                     , _fontKerning = Just kernPairs
                     , _fontHorizontalMetrics = Just hmtx } str =
     fetcher <$> glyphIndexPairs
@@ -295,7 +295,7 @@ glyphOfStrings Font { _fontMap = Just mapping
     kerning l r = getKerningValue (fromIntegral l) (fromIntegral r) kernPairs
     kern l r m = m { _hmtxAdvanceWidth = _hmtxAdvanceWidth m + kerning l r }
     metrics = _glyphMetrics hmtx
-    fetcher (l, r) = (glyphes V.! l, kern l r (metrics V.! l))
+    fetcher (l, r) = (glyphs V.! l, kern l r (metrics V.! l))
 glyphOfStrings _ _ = []
 
 -- | Return the number of pixels relative to the point size.
@@ -349,15 +349,15 @@ getStringCurveAtPoint :: Dpi            -- ^ Dot per inch of the output.
                       -> (Float, Float) -- ^ Initial position of the baseline.
                       -> [(Font, PointSize, String)] -- ^ Text to draw
                       -> [[VU.Vector (Float, Float)]] -- ^ List of contours for each char
-getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
-  glyphes = concat [(font, size,)
+getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphs where
+  glyphs = concat [(font, size,)
                          <$> glyphOfStrings font str | (font, size, str) <- lst]
 
   toPixel (font, pointSize, _) = toPixelCoord font pointSize dpi
   toCoord (font, pointSize, _) = toFCoord font pointSize dpi
 
   maximumSize = maximum [ toPixel p . _glfYMax $ _glyphHeader glyph
-                                | p@(_, _, (glyph, _)) <- glyphes ]
+                                | p@(_, _, (glyph, _)) <- glyphs ]
 
   go (xf, yf) p@(font, pointSize, (glyph, metric)) = ((toPixel p $ xi + advance, yf), curves)
     where
@@ -373,8 +373,8 @@ getStringCurveAtPoint dpi initPos lst = snd $ mapAccumL go initPos glyphes where
 -- the glyph geometry for further external manipulation.
 getGlyphForStrings :: Dpi -> [(Font, PointSize, String)]
                    -> [[VU.Vector (Float, Float)]]
-getGlyphForStrings dpi lst =  go <$> glyphes where
-  glyphes = concat
+getGlyphForStrings dpi lst =  go <$> glyphs where
+  glyphs = concat
     [(font, size,) <$> glyphOfStrings font str | (font, size, str) <- lst]
 
   toCoord (font, pointSize, _) = toFCoord font pointSize dpi
@@ -382,7 +382,7 @@ getGlyphForStrings dpi lst =  go <$> glyphes where
   maximumSize :: Float
   maximumSize =
      maximum [ toPixelCoord font pointSize dpi . _glfYMax $ _glyphHeader glyph
-                   | (font, pointSize, (glyph, _)) <- glyphes ]
+                   | (font, pointSize, (glyph, _)) <- glyphs ]
 
   go p@(font, pointSize, (glyph, _metric)) =
     getGlyphIndexCurvesAtPointSizeAndPos
@@ -469,7 +469,7 @@ isPlaceholder Font { _fontMap = Just fontMap } character =
     findCharGlyph fontMap 0 character == 0
 isPlaceholder Font { _fontMap = Nothing } _ = True
 
--- | Retrive the glyph contours and associated transformations.
+-- | Retrieve the glyph contours and associated transformations.
 -- The coordinate system is assumed to be the TTF one (y upward).
 -- No transformation is performed.
 getCharacterGlyphsAndMetrics :: Font
@@ -513,8 +513,8 @@ getCharacterGlyphs allGlyphs allMetrics glyphIndex =
     case _glyphContent (allGlyphs V.! glyphIndex) of
       GlyphEmpty -> mempty
       GlyphComposite compositions _ -> V.concatMap expandComposition compositions
-      GlyphSimple countour ->
-          V.singleton . RawGlyph mempty glyphIndex $ extractFlatOutline countour
+      GlyphSimple contour ->
+          V.singleton . RawGlyph mempty glyphIndex $ extractFlatOutline contour
   where
     recurse = getCharacterGlyphs allGlyphs allMetrics 
 

@@ -442,7 +442,7 @@ evaluate instrs =
     byteExec (IfElse thenBody _)   (_:stack) = byteExec (thenBody ++ instr) stack
     byteExec (Function functionBody : instr) (id:stack) =
         modify (\s -> s { _stFunctions = M.add id functionBody }) >> byteExec instr stack
-    byteExec (Sequence intructions : rest) stack = go instructions stack >>= byteExec rest
+    byteExec (Sequence instructions : rest) stack = go instructions stack >>= byteExec rest
 
 #endif
 
