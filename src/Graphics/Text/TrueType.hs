@@ -225,7 +225,7 @@ getFontNameAndStyle =
   where
     isNecessaryForName v = v == "name" || v == "head"
 
--- | This function will search in the system for truetype
+-- | This function will search in the system for TrueType
 -- files and index them in a cache for further fast search.
 buildCache :: IO FontCache
 buildCache = buildFontCache loader
