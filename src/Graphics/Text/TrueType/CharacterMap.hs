@@ -107,7 +107,7 @@ instance Binary CharacterMaps where
       startIndex <- bytesRead
       versionNumber <- getWord16be
       when (versionNumber /= 0)
-           (fail "Characte map - invalid version number")
+           (fail "Character map - invalid version number")
       tableCount <- fromIntegral <$> getWord16be
       let descFetcher = (,,) <$> get <*> getWord16be <*> getWord32be
           third (_, _, t) = t

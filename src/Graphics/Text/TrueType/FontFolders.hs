@@ -132,7 +132,7 @@ instance Binary FontDescriptor where
 --
 -- FontCache is an instance of binary, to get okish
 -- performance you should save it in a file somewhere
--- instead of rebuilding it everytime!
+-- instead of rebuilding it every time!
 --
 -- The font cache is dependent on the version
 -- of rasterific, you must rebuild it for every

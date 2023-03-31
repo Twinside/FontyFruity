@@ -55,7 +55,7 @@ instance Binary NameTable where
     return . NameTable . V.fromListN (fromIntegral count) $ map fetcher records
 
 data NameRecords = NameRecords
-    { _nrPlatoformId        :: {-# UNPACK #-} !Word16
+    { _nrPlatformId        :: {-# UNPACK #-} !Word16
     , _nrPlatformSpecificId :: {-# UNPACK #-} !Word16
     , _nrLanguageId         :: {-# UNPACK #-} !Word16
     , _nrNameId             :: {-# UNPACK #-} !Word16
@@ -85,19 +85,19 @@ fontFamilyName (NameTable { _ntRecords = records }) =
         platformToWord PlatformWindows
     selectorWin0 r =
                   _nrNameId r == fontFamilyId &&
-      _nrPlatoformId r        == windowsPlatform &&
+      _nrPlatformId r        == windowsPlatform &&
       _nrPlatformSpecificId r == 0
 
     selectorWin1 r =
                   _nrNameId r == fontFamilyId &&
-      _nrPlatoformId r        == windowsPlatform &&
+      _nrPlatformId r        == windowsPlatform &&
       _nrPlatformSpecificId r == 1
 
     macPlatform =
         platformToWord PlatformMacintosh
     selectorMac r =
                   _nrNameId r == fontFamilyId &&
-      _nrPlatoformId r        == macPlatform &&
+      _nrPlatformId r        == macPlatform &&
       _nrPlatformSpecificId r == 0
 
     unicodePlatform =
@@ -106,7 +106,7 @@ fontFamilyName (NameTable { _ntRecords = records }) =
         unicodePlatformSpecificToId UnicodeBMPOnly2_0
     selectorUnicode r =
                   _nrNameId r == fontFamilyId &&
-      _nrPlatoformId r        == unicodePlatform &&
+      _nrPlatformId r        == unicodePlatform &&
       _nrPlatformSpecificId r == semanticUnicode2
 
 instance Binary NameRecords where

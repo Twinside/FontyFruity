@@ -8,7 +8,7 @@ v0.5.3.4 September 2018
  * Fix: GHC 8.6.1 compat
 
 v0.5.3.3 June 2017
- * Fix: Composite glyph positionning (patch from hsyl20)
+ * Fix: Composite glyph positioning (patch from hsyl20)
  * Fix: glyph lookup (patch from hsyl20)
 
 v0.5.3.2 May 2016
@@ -17,7 +17,7 @@ v0.5.3.2 May 2016
 v0.5.3(.1) February 2016
  * Fix: bug when trying to scan a directory
  * Addition: exposing descriptorOf function
- * Enhancement: Made FontDescriptor strictier.
+ * Enhancement: Made FontDescriptor stricter.
 
 v0.5.2 August 2015
  * Fix: GHC 7.4 compilation

@@ -132,8 +132,8 @@ data MacPlatformId
    | MacSpecificUninterpreted
    deriving (Eq, Ord, Show)
 
-macSpecifcIdList :: [MacPlatformId]
-macSpecifcIdList =
+macSpecificIdList :: [MacPlatformId]
+macSpecificIdList =
     [ MacSpecificRoman, MacSpecificJapanese, MacSpecificChineseTraditional
     , MacSpecificKorean, MacSpecificArabic, MacSpecificHebrew
     , MacSpecificGreek, MacSpecificRussian, MacSpecificRSymbol
@@ -154,19 +154,19 @@ prepareSpecificMaps lst = (toWord, toPlatform)
     toWord = M.fromList $ zip lst [0 ..]
     toPlatform = M.fromList $ zip [0 ..] lst
 
-mapSpecifcIdMaps :: ( M.Map MacPlatformId Word16
+mapSpecificIdMaps :: ( M.Map MacPlatformId Word16
                     , M.Map Word16 MacPlatformId )
-mapSpecifcIdMaps = prepareSpecificMaps macSpecifcIdList
+mapSpecificIdMaps = prepareSpecificMaps macSpecificIdList
 
 instance Binary MacPlatformId where
     get = finder <$> getWord16be
       where
-        (_, to) = mapSpecifcIdMaps
+        (_, to) = mapSpecificIdMaps
         finder v = M.findWithDefault MacSpecificUninterpreted v to
 
     put v = putWord16be val
       where
-        (from, _) = mapSpecifcIdMaps
+        (from, _) = mapSpecificIdMaps
         val = M.findWithDefault 32 v from
 
 data MacLanguage
