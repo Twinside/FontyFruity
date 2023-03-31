@@ -1,7 +1,7 @@
 FontyFruity
 ===========
 
-[![Hackage](https://img.shields.io/hackage/v/FontyFruity.svg)](http://hackage.haskell.org/package/FontyFruity)
+[![Hackage](https://img.shields.io/hackage/v/FontyFruity.svg)](https://hackage.haskell.org/package/FontyFruity)
 
 An haskell TrueType file parser.
 
